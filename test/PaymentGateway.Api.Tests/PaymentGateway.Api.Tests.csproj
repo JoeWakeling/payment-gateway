@@ -23,6 +23,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\PaymentGateway.Api\PaymentGateway.Api.csproj" />
+    <ProjectReference Include="..\..\src\PaymentGateway.Domain\PaymentGateway.Domain.csproj" />
+    <ProjectReference Include="..\..\src\PaymentGateway.Infrastructure\PaymentGateway.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
