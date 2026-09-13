@@ -38,3 +38,14 @@ Api is the composition root — it references Infrastructure only to wire up DI 
 
 ### Why not fewer projects
 A single project with folders would have been an equally legitimate, simpler choice. Four projects was chosen to make dependency boundaries compiler-enforced (e.g. Domain genuinely can't reference Infrastructure) rather than relying on folder discipline
+
+## Validation
+
+Two-step validation for the payment processing request, split across layers:
+
+1. **Request shape** — FluentValidation `AbstractValidator`s against the request DTO (card number/CVV length + numeric, expiry month range, currency length, amount etc.). Pure structural checks, no external state/dependencies.
+2. **Business rules** — Application layer (expiry month+year is in the future). Needs external state (e.g. clock via TimeProvider), so it doesn't belong in a shape validator.
+
+Currency is validated case-insensitively against 3 currencies (GBP, USD, EUR) at the shape layer, then normalised to uppercase in Application — so `"gbp"` and `"GBP"`, for example, are both valid.
+
+Both failure paths return the same `Rejected` response — this 2-step validation process is opaque to the caller.
