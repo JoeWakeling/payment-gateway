@@ -31,7 +31,7 @@ public class GetPaymentsTests
 
         var paymentsRepository = new PaymentsRepository();
         paymentsRepository.Add(payment);
-        var paymentsService = new PaymentsService(paymentsRepository);
+        var paymentsService = new PaymentsService(paymentsRepository, TimeProvider.System);
 
         var webApplicationFactory = new WebApplicationFactory<PaymentsController>();
         var client = webApplicationFactory.WithWebHostBuilder(builder =>
