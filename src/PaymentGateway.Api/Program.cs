@@ -2,6 +2,7 @@ using FluentValidation;
 
 using PaymentGateway.Api.Validators;
 using PaymentGateway.Application;
+using PaymentGateway.Application.Interfaces;
 using PaymentGateway.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);

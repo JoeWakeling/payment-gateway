@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PaymentGateway.Api.Controllers;
 using PaymentGateway.Api.Models.Responses;
 using PaymentGateway.Application;
+using PaymentGateway.Application.Interfaces;
 using PaymentGateway.Domain;
 using PaymentGateway.Infrastructure;
 
