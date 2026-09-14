@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 
 using PaymentGateway.Api.Models.Responses;
-using PaymentGateway.Application;
+using PaymentGateway.Application.Interfaces;
 
 namespace PaymentGateway.Api.Controllers;
 

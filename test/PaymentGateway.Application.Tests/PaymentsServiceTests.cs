@@ -1,5 +1,6 @@
 using Moq;
 
+using PaymentGateway.Application.Interfaces;
 using PaymentGateway.Domain;
 
 namespace PaymentGateway.Application.Tests;
