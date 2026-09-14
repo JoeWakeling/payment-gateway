@@ -49,3 +49,16 @@ Two-step validation for the payment processing request, split across layers:
 Currency is validated case-insensitively against 3 currencies (GBP, USD, EUR) at the shape layer, then normalised to uppercase in Application — so `"gbp"` and `"GBP"`, for example, are both valid.
 
 Both failure paths return the same `Rejected` response — this 2-step validation process is opaque to the caller.
+
+## Acquiring bank client
+
+`IAcquiringBankClient` (Application) is implemented by `AcquiringBankClient` (Infrastructure), a typed `HttpClient` registered in `Program.cs` with the base URL read from `AcquiringBank:BaseUrl` config. The client maps to/from the simulator's snake_case contract using internal DTOs, so the Application models stay free of transport concerns.
+
+### Failure mapping
+A `200 OK` authorization decision (authorized or declined) is returned as an `AcquiringBankPaymentResponse`. A `503 Service Unavailable` is an expected outcome per the simulator spec, so it is thrown as a distinct `AcquiringBankUnavailableException`, letting orchestration map "bank unavailable" separately from authorized/declined. Anything else — other status codes, network errors, timeouts, malformed/empty bodies — is thrown as the base `AcquiringBankException`, so callers never need to know about HTTP. A `400` falls into this bucket deliberately: the simulator only returns it for incomplete requests, which our own validation should prevent, so it would indicate a gateway bug rather than a business outcome. Cancellation requested by the caller is not wrapped and propagates as `OperationCanceledException`.
+
+### Retries
+No retry logic was implemented for bank communication failures. In production, transient failures (network errors, 503s) would typically warrant a retry policy with backoff (e.g. via Polly), but the bank simulator's 503 response is deterministic based on card number rather than transient, so retries wouldn't change the outcome in this test harness. Idempotency would also need considering before adding retries to a payment flow, to avoid double-charging on a retried request that actually succeeded.
+
+### Idempotency
+Not implemented, as the bank simulator has no support for idempotency keys. In production this would be important — perhaps an idempotency key passed through to the bank so that retried requests can't result in duplicate charges.
