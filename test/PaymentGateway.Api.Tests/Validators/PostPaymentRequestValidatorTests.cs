@@ -91,6 +91,19 @@ public class PostPaymentRequestValidatorTests
         result.ShouldHaveValidationErrorFor(x => x.CardNumber);
     }
 
+    [Theory]
+    [InlineData("1234567890\u0664\u0664\u0664\u0664")] // Arabic-Indic digits
+    [InlineData("1234567890\uFF14\uFF14\uFF14\uFF14")] // Fullwidth digits
+    public void CardNumber_WhenContainsNonAsciiDigits_FailsValidation(string cardNumber)
+    {
+        var request = CreateValidRequest();
+        request.CardNumber = cardNumber;
+
+        var result = _validator.TestValidate(request);
+
+        result.ShouldHaveValidationErrorFor(x => x.CardNumber);
+    }
+
     // ExpiryMonth tests
 
     [Theory]
@@ -299,6 +312,19 @@ public class PostPaymentRequestValidatorTests
     {
         var request = CreateValidRequest();
         request.Cvv = "12a";
+
+        var result = _validator.TestValidate(request);
+
+        result.ShouldHaveValidationErrorFor(x => x.Cvv);
+    }
+
+    [Theory]
+    [InlineData("12\u0664")] // Arabic-Indic digit
+    [InlineData("12\uFF14")] // Fullwidth digit
+    public void Cvv_WhenContainsNonAsciiDigits_FailsValidation(string cvv)
+    {
+        var request = CreateValidRequest();
+        request.Cvv = cvv;
 
         var result = _validator.TestValidate(request);
 
