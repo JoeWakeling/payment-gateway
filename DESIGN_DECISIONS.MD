@@ -8,7 +8,9 @@ PaymentGateway.Application     (Class Library)
 PaymentGateway.Infrastructure  (Class Library)
 PaymentGateway.Api             (ASP.NET Core Web API)
 
+PaymentGateway.Api.Tests
 PaymentGateway.Application.Tests
+PaymentGateway.Infrastructure.Tests
 PaymentGateway.IntegrationTests
 ```
 
