@@ -269,6 +269,20 @@ public class PaymentsServiceTests
         VerifyLogged(LogLevel.Information, "Payment rejected: card expired");
     }
 
+    [Fact]
+    public async Task ProcessPaymentAsync_CardExpiresInDecemberOfMaxYear_ProcessesPayment()
+    {
+        // Arrange
+        SetupNow(2024, 1, 15);
+        var request = CreateRequest(expiryMonth: 12, expiryYear: 9999);
+
+        // Act
+        var payment = await _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(PaymentStatus.Authorized, payment.Status);
+    }
+
     [Theory]
     [InlineData("gbp", "GBP")]
     [InlineData("uSd", "USD")]
