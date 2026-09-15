@@ -7,19 +7,12 @@ namespace PaymentGateway.Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class PaymentsController : Controller
+public class PaymentsController(IPaymentsService paymentsService) : Controller
 {
-    private readonly IPaymentsService _paymentsService;
-
-    public PaymentsController(IPaymentsService paymentsService)
-    {
-        _paymentsService = paymentsService;
-    }
-
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<PostPaymentResponse?>> GetPaymentAsync(Guid id)
+    public async Task<ActionResult<PostPaymentResponse?>> GetPaymentAsync(Guid id, CancellationToken cancellationToken)
     {
-        var payment = _paymentsService.Get(id);
+        var payment = await paymentsService.GetAsync(id, cancellationToken);
 
         if (payment == null)
         {
