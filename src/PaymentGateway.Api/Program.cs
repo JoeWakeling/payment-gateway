@@ -21,6 +21,8 @@ builder.Services.AddSerilog((services, loggerConfiguration) => loggerConfigurati
         .Enrich.FromLogContext(),
     preserveStaticLogger: true);
 
+builder.Services.AddProblemDetails();
+
 builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -52,6 +54,13 @@ builder.Services.AddHttpClient<IAcquiringBankClient, AcquiringBankClient>(client
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+
+// First in the pipeline, so it catches exceptions from everything after it and turns them into a problem+json 500.
+// Deliberately outside the request logging middleware: the exception propagates through that middleware first, so
+// the request completion event is still written (at Error, with the exception and status code 500) before the
+// response is produced.
+app.UseExceptionHandler();
+
 app.UseSerilogRequestLogging(options =>
     options.Logger = app.Services.GetRequiredService<Serilog.ILogger>());
 
