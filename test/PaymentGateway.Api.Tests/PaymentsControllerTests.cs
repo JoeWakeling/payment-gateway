@@ -49,7 +49,7 @@ public class PaymentsControllerTests
     {
         Id = id,
         Status = PaymentStatus.Declined,
-        CardNumberLastFour = 8877,
+        CardNumberLastFour = "8877",
         ExpiryMonth = 11,
         ExpiryYear = 2031,
         Currency = "GBP",
