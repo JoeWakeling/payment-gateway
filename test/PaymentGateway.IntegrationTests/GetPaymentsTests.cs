@@ -2,14 +2,12 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Microsoft.AspNetCore.Mvc.Testing;
+
 using Microsoft.Extensions.DependencyInjection;
 
-using PaymentGateway.Api.Controllers;
 using PaymentGateway.Api.Models.Responses;
 using PaymentGateway.Application.Interfaces;
 using PaymentGateway.Domain;
-using PaymentGateway.Infrastructure;
 
 namespace PaymentGateway.IntegrationTests;
 
@@ -37,14 +35,10 @@ public class GetPaymentsTests
             Currency = "GBP"
         };
 
-        var paymentsRepository = new InMemoryPaymentsRepository();
+        await using var factory = new PaymentGatewayApiFactory();
+        var paymentsRepository = factory.Services.GetRequiredService<IPaymentsRepository>();
         await paymentsRepository.AddAsync(payment, TestContext.Current.CancellationToken);
-
-        var webApplicationFactory = new WebApplicationFactory<PaymentsController>();
-        var client = webApplicationFactory.WithWebHostBuilder(builder =>
-            builder.ConfigureServices(services => services
-                .AddSingleton<IPaymentsRepository>(paymentsRepository)))
-            .CreateClient();
+        var client = factory.CreateClient();
 
         // Act
         var response = await client.GetAsync($"/api/Payments/{payment.Id}", TestContext.Current.CancellationToken);
@@ -68,8 +62,8 @@ public class GetPaymentsTests
     public async Task Returns404IfPaymentNotFound()
     {
         // Arrange
-        var webApplicationFactory = new WebApplicationFactory<PaymentsController>();
-        var client = webApplicationFactory.CreateClient();
+        await using var factory = new PaymentGatewayApiFactory();
+        var client = factory.CreateClient();
 
         // Act
         var response = await client.GetAsync($"/api/Payments/{Guid.NewGuid()}", TestContext.Current.CancellationToken);
