@@ -91,6 +91,14 @@ The repository is registered as a singleton, so ASP.NET Core requests hit it con
 ### Async interface
 `AddAsync`/`GetAsync` return `Task` even though the in-memory implementation completes synchronously. A real database call would be I/O-bound and async, so the interface matches that now, and a database-backed implementation won't force signature changes through the service and controller. It also keeps the pipeline consistently async alongside the acquiring bank client.
 
+## Unhandled exceptions
+
+Every deliberate error response is RFC 7807 problem details (`400` from validation, `422` from a rejected payment, `404` from an unknown payment), so unexpected failures use the same shape. `AddProblemDetails()` plus `UseExceptionHandler()` turn anything that escapes the pipeline into a `500` with an `application/problem+json` body, instead of the bare `500` with no body that ASP.NET Core returns otherwise. The body carries only `type`, `title` and `status` — no message, type name or stack trace, checked by a test — so a gateway bug can't leak internals to a caller.
+
+No custom handler or exception-to-status-code mapping was added: the failures that have a meaningful HTTP status are already handled where they belong (`AcquiringBankException` → `Declined`/`200` in `PaymentsService`, `PaymentRejectedException` → `422` in the controller), so anything reaching this middleware is by definition unexpected and a `500` is the correct answer.
+
+The middleware is registered first, deliberately outside `UseSerilogRequestLogging`. The exception therefore passes through the request logging middleware before being handled, so the request completion event is still written — at Error, with the exception and status code `500` attached — rather than being logged separately as a plain Information-level `500`.
+
 ## Logging
 
 Serilog is used because the built-in `Microsoft.Extensions.Logging` has no file provider. Only the Api project depends on Serilog; Application and Infrastructure log through `ILogger<T>`.
