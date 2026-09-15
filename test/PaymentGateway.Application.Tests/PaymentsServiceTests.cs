@@ -3,7 +3,9 @@ using Microsoft.Extensions.Logging.Testing;
 
 using Moq;
 
+using PaymentGateway.Application.Exceptions;
 using PaymentGateway.Application.Interfaces;
+using PaymentGateway.Application.Models;
 using PaymentGateway.Domain;
 
 namespace PaymentGateway.Application.Tests;
@@ -11,25 +13,41 @@ namespace PaymentGateway.Application.Tests;
 public class PaymentsServiceTests
 {
     private readonly Mock<IPaymentsRepository> _paymentsRepository = new();
+    private readonly Mock<IAcquiringBankClient> _acquiringBankClient = new();
     private readonly Mock<TimeProvider> _timeProvider = new();
     private readonly FakeLogger<PaymentsService> _logger = new();
     private readonly PaymentsService _sut;
 
     public PaymentsServiceTests()
     {
-        _sut = new PaymentsService(_paymentsRepository.Object, _timeProvider.Object, _logger);
+        _sut = new PaymentsService(
+            _paymentsRepository.Object,
+            _acquiringBankClient.Object,
+            _timeProvider.Object,
+            _logger);
+
+        SetupBankResponse(authorized: true);
     }
 
-    private static Payment CreatePayment(int expiryMonth, int expiryYear) => new()
-    {
-        Id = Guid.NewGuid(),
-        Status = PaymentStatus.Authorized,
-        CardNumberLastFour = 1234,
-        ExpiryMonth = expiryMonth,
-        ExpiryYear = expiryYear,
-        Currency = "GBP",
-        Amount = 100
-    };
+    private static ProcessPaymentRequest CreateRequest(
+        int expiryMonth = 6,
+        int expiryYear = 2024,
+        string currency = "GBP") => new(
+        Id: Guid.NewGuid(),
+        CardNumber: "2222405343248877",
+        ExpiryMonth: expiryMonth,
+        ExpiryYear: expiryYear,
+        Currency: currency,
+        Amount: 100,
+        Cvv: "123");
+
+    private void SetupNow(int year, int month, int day) =>
+        _timeProvider.Setup(tp => tp.GetUtcNow()).Returns(new DateTimeOffset(year, month, day, 0, 0, 0, TimeSpan.Zero));
+
+    private void SetupBankResponse(bool authorized) =>
+        _acquiringBankClient
+            .Setup(c => c.ProcessPaymentAsync(It.IsAny<AcquiringBankPaymentRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AcquiringBankPaymentResponse(authorized, authorized ? "auth-code" : null));
 
     private void VerifyLogged(LogLevel level, string message)
     {
@@ -38,32 +56,140 @@ public class PaymentsServiceTests
         Assert.Equal(message, record.Message);
     }
 
+    private void VerifyNotProcessed()
+    {
+        _acquiringBankClient.Verify(
+            c => c.ProcessPaymentAsync(It.IsAny<AcquiringBankPaymentRequest>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        _paymentsRepository.Verify(r => r.AddAsync(It.IsAny<Payment>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     [Fact]
-    public async Task Add_CardExpiresInFutureMonth_AddsPayment()
+    public async Task ProcessPaymentAsync_BankAuthorizes_StoresAndReturnsAuthorizedPayment()
     {
         // Arrange
-        _timeProvider.Setup(tp => tp.GetUtcNow()).Returns(new DateTimeOffset(2024, 1, 15, 0, 0, 0, TimeSpan.Zero));
-        var payment = CreatePayment(expiryMonth: 2, expiryYear: 2024);
+        SetupNow(2024, 1, 15);
+        var request = CreateRequest(expiryMonth: 2, expiryYear: 2024);
 
         // Act
-        await _sut.AddAsync(payment, TestContext.Current.CancellationToken);
+        var payment = await _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
+        Assert.Equal(request.Id, payment.Id);
+        Assert.Equal(PaymentStatus.Authorized, payment.Status);
+        Assert.Equal(8877, payment.CardNumberLastFour);
+        Assert.Equal(request.ExpiryMonth, payment.ExpiryMonth);
+        Assert.Equal(request.ExpiryYear, payment.ExpiryYear);
+        Assert.Equal(request.Currency, payment.Currency);
+        Assert.Equal(request.Amount, payment.Amount);
         _paymentsRepository.Verify(r => r.AddAsync(payment, TestContext.Current.CancellationToken), Times.Once);
         VerifyLogged(LogLevel.Information, "Payment stored with status Authorized");
         var scope = Assert.IsType<Dictionary<string, object>>(Assert.Single(_logger.LatestRecord.Scopes));
-        Assert.Equal(payment.Id, scope["PaymentId"]);
+        Assert.Equal(request.Id, scope["PaymentId"]);
     }
 
     [Fact]
-    public async Task Add_CardExpiresInCurrentMonth_AddsPayment()
+    public async Task ProcessPaymentAsync_BankDeclines_StoresAndReturnsDeclinedPayment()
     {
         // Arrange
-        _timeProvider.Setup(tp => tp.GetUtcNow()).Returns(new DateTimeOffset(2024, 6, 15, 0, 0, 0, TimeSpan.Zero));
-        var payment = CreatePayment(expiryMonth: 6, expiryYear: 2024);
+        SetupNow(2024, 1, 15);
+        SetupBankResponse(authorized: false);
+        var request = CreateRequest(expiryMonth: 2, expiryYear: 2024);
 
         // Act
-        await _sut.AddAsync(payment, TestContext.Current.CancellationToken);
+        var payment = await _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(PaymentStatus.Declined, payment.Status);
+        _paymentsRepository.Verify(r => r.AddAsync(payment, TestContext.Current.CancellationToken), Times.Once);
+        VerifyLogged(LogLevel.Information, "Payment stored with status Declined");
+    }
+
+    [Fact]
+    public async Task ProcessPaymentAsync_SendsRequestDetailsToBank()
+    {
+        // Arrange
+        SetupNow(2024, 1, 15);
+        var request = CreateRequest(expiryMonth: 2, expiryYear: 2024);
+
+        // Act
+        await _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken);
+
+        // Assert
+        _acquiringBankClient.Verify(c => c.ProcessPaymentAsync(
+                new AcquiringBankPaymentRequest(
+                    request.CardNumber,
+                    request.ExpiryMonth,
+                    request.ExpiryYear,
+                    request.Currency,
+                    request.Amount,
+                    request.Cvv),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ProcessPaymentAsync_BankFails_StoresAndReturnsDeclinedPayment(bool bankUnavailable)
+    {
+        // Arrange
+        SetupNow(2024, 1, 15);
+        var exception = bankUnavailable
+            ? new AcquiringBankUnavailableException("Acquiring bank is unavailable.")
+            : new AcquiringBankException("Failed to communicate with the acquiring bank.", new HttpRequestException());
+        _acquiringBankClient
+            .Setup(c => c.ProcessPaymentAsync(It.IsAny<AcquiringBankPaymentRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(exception);
+        var request = CreateRequest(expiryMonth: 2, expiryYear: 2024);
+
+        // Act
+        var payment = await _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(request.Id, payment.Id);
+        Assert.Equal(PaymentStatus.Declined, payment.Status);
+        Assert.Equal(8877, payment.CardNumberLastFour);
+        _paymentsRepository.Verify(r => r.AddAsync(payment, TestContext.Current.CancellationToken), Times.Once);
+        var records = _logger.Collector.GetSnapshot();
+        Assert.Collection(records,
+            r =>
+            {
+                Assert.Equal(LogLevel.Warning, r.Level);
+                Assert.Equal("Acquiring bank did not return an authorization decision; declining payment", r.Message);
+            },
+            r =>
+            {
+                Assert.Equal(LogLevel.Information, r.Level);
+                Assert.Equal("Payment stored with status Declined", r.Message);
+            });
+    }
+
+    [Fact]
+    public async Task ProcessPaymentAsync_CancelledDuringBankCall_PropagatesAndDoesNotStorePayment()
+    {
+        // Arrange
+        SetupNow(2024, 1, 15);
+        _acquiringBankClient
+            .Setup(c => c.ProcessPaymentAsync(It.IsAny<AcquiringBankPaymentRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OperationCanceledException());
+        var request = CreateRequest(expiryMonth: 2, expiryYear: 2024);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken));
+        _paymentsRepository.Verify(r => r.AddAsync(It.IsAny<Payment>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ProcessPaymentAsync_CardExpiresInCurrentMonth_ProcessesPayment()
+    {
+        // Arrange
+        SetupNow(2024, 6, 15);
+        var request = CreateRequest(expiryMonth: 6, expiryYear: 2024);
+
+        // Act
+        var payment = await _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         _paymentsRepository.Verify(r => r.AddAsync(payment, TestContext.Current.CancellationToken), Times.Once);
@@ -71,14 +197,14 @@ public class PaymentsServiceTests
     }
 
     [Fact]
-    public async Task Add_CardExpiresInFutureYear_AddsPayment()
+    public async Task ProcessPaymentAsync_CardExpiresInFutureYear_ProcessesPayment()
     {
         // Arrange
-        _timeProvider.Setup(tp => tp.GetUtcNow()).Returns(new DateTimeOffset(2024, 6, 15, 0, 0, 0, TimeSpan.Zero));
-        var payment = CreatePayment(expiryMonth: 1, expiryYear: 2025);
+        SetupNow(2024, 6, 15);
+        var request = CreateRequest(expiryMonth: 1, expiryYear: 2025);
 
         // Act
-        await _sut.AddAsync(payment, TestContext.Current.CancellationToken);
+        var payment = await _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         _paymentsRepository.Verify(r => r.AddAsync(payment, TestContext.Current.CancellationToken), Times.Once);
@@ -86,73 +212,65 @@ public class PaymentsServiceTests
     }
 
     [Fact]
-    public async Task Add_CardExpiredInPreviousMonth_ThrowsArgumentException()
+    public async Task ProcessPaymentAsync_CardExpiredInPreviousMonth_ThrowsPaymentRejectedException()
     {
         // Arrange
-        _timeProvider.Setup(tp => tp.GetUtcNow()).Returns(new DateTimeOffset(2024, 6, 1, 0, 0, 0, TimeSpan.Zero));
-        var payment = CreatePayment(expiryMonth: 5, expiryYear: 2024);
+        SetupNow(2024, 6, 1);
+        var request = CreateRequest(expiryMonth: 5, expiryYear: 2024);
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<ArgumentException>(() => _sut.AddAsync(payment, TestContext.Current.CancellationToken));
-        Assert.Equal("Payment card has expired.", exception.Message);
-        _paymentsRepository.Verify(r => r.AddAsync(It.IsAny<Payment>(), It.IsAny<CancellationToken>()), Times.Never);
+        var exception = await Assert.ThrowsAsync<PaymentRejectedException>(
+            () => _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken));
+        Assert.Equal("Rejected: card has expired", exception.Message);
+        VerifyNotProcessed();
         VerifyLogged(LogLevel.Information, "Payment rejected: card expired");
     }
 
     [Fact]
-    public async Task Add_CardExpiredInPreviousYear_ThrowsArgumentException()
+    public async Task ProcessPaymentAsync_CardExpiredInPreviousYear_ThrowsPaymentRejectedException()
     {
         // Arrange
-        _timeProvider.Setup(tp => tp.GetUtcNow()).Returns(new DateTimeOffset(2024, 3, 10, 0, 0, 0, TimeSpan.Zero));
-        var payment = CreatePayment(expiryMonth: 12, expiryYear: 2023);
+        SetupNow(2024, 3, 10);
+        var request = CreateRequest(expiryMonth: 12, expiryYear: 2023);
 
         // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() => _sut.AddAsync(payment, TestContext.Current.CancellationToken));
-        _paymentsRepository.Verify(r => r.AddAsync(It.IsAny<Payment>(), It.IsAny<CancellationToken>()), Times.Never);
+        await Assert.ThrowsAsync<PaymentRejectedException>(
+            () => _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken));
+        VerifyNotProcessed();
         VerifyLogged(LogLevel.Information, "Payment rejected: card expired");
     }
 
     [Fact]
-    public async Task Add_CardExpiredOnLastDayOfExpiryMonth_ThrowsArgumentException()
+    public async Task ProcessPaymentAsync_CardExpiredOnLastDayOfExpiryMonth_ThrowsPaymentRejectedException()
     {
         // Arrange — first day after expiry month
-        _timeProvider.Setup(tp => tp.GetUtcNow()).Returns(new DateTimeOffset(2024, 2, 1, 0, 0, 0, TimeSpan.Zero));
-        var payment = CreatePayment(expiryMonth: 1, expiryYear: 2024);
+        SetupNow(2024, 2, 1);
+        var request = CreateRequest(expiryMonth: 1, expiryYear: 2024);
 
         // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() => _sut.AddAsync(payment, TestContext.Current.CancellationToken));
-        _paymentsRepository.Verify(r => r.AddAsync(It.IsAny<Payment>(), It.IsAny<CancellationToken>()), Times.Never);
+        await Assert.ThrowsAsync<PaymentRejectedException>(
+            () => _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken));
+        VerifyNotProcessed();
         VerifyLogged(LogLevel.Information, "Payment rejected: card expired");
     }
 
-    [Fact]
-    public async Task Add_LowercaseCurrency_NormalisesToUppercase()
+    [Theory]
+    [InlineData("gbp", "GBP")]
+    [InlineData("uSd", "USD")]
+    public async Task ProcessPaymentAsync_NonUppercaseCurrency_NormalisesToUppercase(string currency, string expected)
     {
         // Arrange
-        _timeProvider.Setup(tp => tp.GetUtcNow()).Returns(new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero));
-        var payment = CreatePayment(expiryMonth: 6, expiryYear: 2024);
-        payment.Currency = "gbp";
+        SetupNow(2024, 1, 1);
+        var request = CreateRequest(currency: currency);
 
         // Act
-        await _sut.AddAsync(payment, TestContext.Current.CancellationToken);
+        var payment = await _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal("GBP", payment.Currency);
-        _paymentsRepository.Verify(r => r.AddAsync(payment, TestContext.Current.CancellationToken), Times.Once);
-    }
-
-    [Fact]
-    public async Task Add_MixedCaseCurrency_NormalisesToUppercase()
-    {
-        // Arrange
-        _timeProvider.Setup(tp => tp.GetUtcNow()).Returns(new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero));
-        var payment = CreatePayment(expiryMonth: 6, expiryYear: 2024);
-        payment.Currency = "uSd";
-
-        // Act
-        await _sut.AddAsync(payment, TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.Equal("USD", payment.Currency);
+        Assert.Equal(expected, payment.Currency);
+        _acquiringBankClient.Verify(c => c.ProcessPaymentAsync(
+                It.Is<AcquiringBankPaymentRequest>(r => r.Currency == expected),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 }
