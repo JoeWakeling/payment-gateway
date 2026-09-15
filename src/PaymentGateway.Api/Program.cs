@@ -28,7 +28,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton<IPaymentsRepository, PaymentsRepository>();
+builder.Services.AddSingleton<IPaymentsRepository, InMemoryPaymentsRepository>();
 builder.Services.AddScoped<IPaymentsService, PaymentsService>();
 builder.Services.AddHttpClient<IAcquiringBankClient, AcquiringBankClient>(client =>
 {

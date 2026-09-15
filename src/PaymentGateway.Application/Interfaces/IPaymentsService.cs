@@ -6,5 +6,5 @@ namespace PaymentGateway.Application.Interfaces;
 public interface IPaymentsService
 {
     public Task<Payment> ProcessPaymentAsync(ProcessPaymentRequest request, CancellationToken cancellationToken);
-    public Payment? GetPaymentById(Guid id);
+    public Task<Payment?> GetPaymentByIdAsync(Guid id, CancellationToken cancellationToken);
 }

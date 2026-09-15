@@ -60,9 +60,9 @@ public class PaymentsController(
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<GetPaymentResponse?>> GetPaymentAsync(Guid id)
+    public async Task<ActionResult<GetPaymentResponse?>> GetPaymentAsync(Guid id, CancellationToken cancellationToken)
     {
-        var payment = paymentsService.GetPaymentById(id);
+        var payment = await paymentsService.GetPaymentByIdAsync(id, cancellationToken);
 
         if (payment == null)
         {

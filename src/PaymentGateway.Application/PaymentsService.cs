@@ -46,16 +46,16 @@ public class PaymentsService(
             Amount = request.Amount
         };
 
-        paymentsRepository.Add(payment);
+        await paymentsRepository.AddAsync(payment, cancellationToken);
 
         logger.LogInformation("Payment stored with status {Status}", payment.Status);
 
         return payment;
     }
 
-    public Payment? GetPaymentById(Guid id)
+    public Task<Payment?> GetPaymentByIdAsync(Guid id, CancellationToken cancellationToken)
     {
-        return paymentsRepository.Get(id);
+        return paymentsRepository.GetAsync(id, cancellationToken);
     }
 
     private bool IsCardExpired(int expiryMonth, int expiryYear)
