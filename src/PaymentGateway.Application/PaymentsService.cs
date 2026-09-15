@@ -21,7 +21,7 @@ public class PaymentsService(
         if (IsCardExpired(request.ExpiryMonth, request.ExpiryYear))
         {
             logger.LogInformation("Payment rejected: card expired");
-            throw new ArgumentException("Payment card has expired.");
+            throw new PaymentRejectedException("card has expired");
         }
 
         var currency = request.Currency.ToUpperInvariant();

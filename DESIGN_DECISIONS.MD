@@ -50,6 +50,8 @@ Currency is validated case-insensitively against 3 currencies (GBP, USD, EUR) at
 
 Request shape failures return `400 Bad Request` with the FluentValidation errors as a validation problem response.
 
+Business rule failures throw a `PaymentRejectedException` (rather than a generic `ArgumentException`), which the controller maps to `422 Unprocessable Entity` with a `ProblemDetails` body (e.g. `"detail": "Rejected: card has expired"`). The request was well-formed, so `422` keeps it distinct from shape failures, and the bank is never called.
+
 ## Acquiring bank client
 
 `IAcquiringBankClient` (Application) is implemented by `AcquiringBankClient` (Infrastructure), a typed `HttpClient` registered in `Program.cs` with the base URL read from `AcquiringBank:BaseUrl` config. The client maps to/from the simulator's snake_case contract using internal DTOs, so the Application models stay free of transport concerns.
