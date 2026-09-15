@@ -86,7 +86,7 @@ public class PaymentsController(
     /// <summary>
     /// Retrieves a previously processed payment.
     /// </summary>
-    /// <param name="id">The payment identifier returned when the payment was processed.</param>
+    /// <param name="id" example="0f8fad5b-d9cb-469f-a165-70867728950e">The payment identifier returned when the payment was processed.</param>
     /// <param name="cancellationToken">Cancellation token for the request.</param>
     /// <response code="200">The payment was found.</response>
     /// <response code="404">No payment exists with the given identifier.</response>

@@ -98,4 +98,4 @@ API documentation is generated via Swagger/OpenAPI (Swashbuckle), available at `
 - `POST /api/payments` — `200` (Authorized/Declined), `400` (validation problem), `422` (payment rejected)
 - `GET /api/payments/{id}` — `200` (payment found), `404` (not found)
 
-Swagger is only enabled in Development, as in the template, since there's no need to expose API docs publicly in production. No example request/response values were added: the field descriptions are enough for two endpoints, and it avoids showing anything resembling real card details.
+Swagger is only enabled in Development, as in the template, since there's no need to expose API docs publicly in production. Example values are set with XML `<example>` tags, so no extra package (e.g. `Swashbuckle.AspNetCore.Filters`) is needed. The example card number is the bank simulator's test card (`2222405343248877`, which is authorized), not a real card, so "Try it out" in Swagger UI works against the simulator. A tag only gives one example per schema, so the 400/422/404 responses use the generated `ProblemDetails` schema rather than per-status examples.
