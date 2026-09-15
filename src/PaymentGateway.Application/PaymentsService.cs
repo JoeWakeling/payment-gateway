@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 
+using PaymentGateway.Application.Exceptions;
 using PaymentGateway.Application.Interfaces;
 using PaymentGateway.Application.Models;
 using PaymentGateway.Domain;
@@ -25,20 +26,12 @@ public class PaymentsService(
 
         var currency = request.Currency.ToUpperInvariant();
 
-        var bankResponse = await acquiringBankClient.ProcessPaymentAsync(
-            new AcquiringBankPaymentRequest(
-                request.CardNumber,
-                request.ExpiryMonth,
-                request.ExpiryYear,
-                currency,
-                request.Amount,
-                request.Cvv),
-            cancellationToken);
+        var authorized = await ProcessWithBankAsync(request, currency, cancellationToken);
 
         var payment = new Payment
         {
             Id = request.Id,
-            Status = bankResponse.Authorized ? PaymentStatus.Authorized : PaymentStatus.Declined,
+            Status = authorized ? PaymentStatus.Authorized : PaymentStatus.Declined,
             CardNumberLastFour = int.Parse(request.CardNumber[^4..]),
             ExpiryMonth = request.ExpiryMonth,
             ExpiryYear = request.ExpiryYear,
@@ -56,6 +49,33 @@ public class PaymentsService(
     public Task<Payment?> GetPaymentByIdAsync(Guid id, CancellationToken cancellationToken)
     {
         return paymentsRepository.GetAsync(id, cancellationToken);
+    }
+
+    private async Task<bool> ProcessWithBankAsync(
+        ProcessPaymentRequest request,
+        string currency,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var bankResponse = await acquiringBankClient.ProcessPaymentAsync(
+                new AcquiringBankPaymentRequest(
+                    request.CardNumber,
+                    request.ExpiryMonth,
+                    request.ExpiryYear,
+                    currency,
+                    request.Amount,
+                    request.Cvv),
+                cancellationToken);
+
+            return bankResponse.Authorized;
+        }
+        catch (AcquiringBankException)
+        {
+            // No usable authorization decision from the bank, so the payment cannot be treated as authorized.
+            logger.LogWarning("Acquiring bank did not return an authorization decision; declining payment");
+            return false;
+        }
     }
 
     private bool IsCardExpired(int expiryMonth, int expiryYear)

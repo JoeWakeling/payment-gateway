@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PaymentGateway.Api.Controllers;
 using PaymentGateway.Api.Models.Requests;
 using PaymentGateway.Api.Models.Responses;
+using PaymentGateway.Application.Exceptions;
 using PaymentGateway.Application.Interfaces;
 using PaymentGateway.Application.Models;
 using PaymentGateway.Domain;
@@ -110,8 +111,41 @@ public class PostPaymentsTests
         Assert.Empty(bankClient.Requests);
     }
 
-    private class StubAcquiringBankClient(AcquiringBankPaymentResponse response) : IAcquiringBankClient
+    [Fact]
+    public async Task Returns200WithDeclinedStatusIfBankFails()
     {
+        // Arrange
+        var bankClient = new StubAcquiringBankClient(
+            new AcquiringBankUnavailableException("Acquiring bank is unavailable."));
+        var client = CreateClient(bankClient);
+
+        // Act
+        var postResponse = await client.PostAsJsonAsync("/api/Payments", CreateValidRequest(),
+            TestContext.Current.CancellationToken);
+        var postPaymentResponse =
+            await postResponse.Content.ReadFromJsonAsync<PostPaymentResponse>(JsonOptions, TestContext.Current.CancellationToken);
+        var getResponse = await client.GetAsync($"/api/Payments/{postPaymentResponse!.Id}",
+            TestContext.Current.CancellationToken);
+        var getPaymentResponse =
+            await getResponse.Content.ReadFromJsonAsync<GetPaymentResponse>(JsonOptions, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, postResponse.StatusCode);
+        Assert.Equal(PaymentStatus.Declined, postPaymentResponse.Status);
+        Assert.Single(bankClient.Requests);
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        Assert.Equal(PaymentStatus.Declined, getPaymentResponse!.Status);
+    }
+
+    private class StubAcquiringBankClient : IAcquiringBankClient
+    {
+        private readonly AcquiringBankPaymentResponse? _response;
+        private readonly AcquiringBankException? _exception;
+
+        public StubAcquiringBankClient(AcquiringBankPaymentResponse response) => _response = response;
+
+        public StubAcquiringBankClient(AcquiringBankException exception) => _exception = exception;
+
         public List<AcquiringBankPaymentRequest> Requests { get; } = [];
 
         public Task<AcquiringBankPaymentResponse> ProcessPaymentAsync(
@@ -119,7 +153,7 @@ public class PostPaymentsTests
             CancellationToken cancellationToken)
         {
             Requests.Add(request);
-            return Task.FromResult(response);
+            return _exception is null ? Task.FromResult(_response!) : Task.FromException<AcquiringBankPaymentResponse>(_exception);
         }
     }
 }
