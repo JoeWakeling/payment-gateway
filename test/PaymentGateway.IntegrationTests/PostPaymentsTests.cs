@@ -131,6 +131,40 @@ public class PostPaymentsTests
     }
 
     [Fact]
+    public async Task Returns400AndDoesNotCallBankIfExpiryYearTooLarge()
+    {
+        // Arrange
+        var bankClient = new StubAcquiringBankClient(new AcquiringBankPaymentResponse(true, "auth-code"));
+        var client = CreateClient(bankClient);
+        var request = CreateValidRequest();
+        request.ExpiryYear = 10000;
+
+        // Act
+        var response = await client.PostAsJsonAsync("/api/Payments", request, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(bankClient.Requests);
+    }
+
+    [Fact]
+    public async Task ProcessesPaymentIfCardExpiresInDecemberOfMaxYear()
+    {
+        // Arrange
+        var bankClient = new StubAcquiringBankClient(new AcquiringBankPaymentResponse(true, "auth-code"));
+        var client = CreateClient(bankClient);
+        var request = CreateValidRequest();
+        request.ExpiryMonth = 12;
+        request.ExpiryYear = 9999;
+
+        // Act
+        var response = await client.PostAsJsonAsync("/api/Payments", request, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Returns422AndDoesNotCallBankIfCardExpired()
     {
         // Arrange

@@ -138,7 +138,9 @@ public class PostPaymentRequestValidatorTests
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    public void ExpiryYear_WhenZeroOrNegative_FailsValidation(int year)
+    [InlineData(10000)]
+    [InlineData(int.MaxValue)]
+    public void ExpiryYear_WhenOutOfRange_FailsValidation(int year)
     {
         var request = CreateValidRequest();
         request.ExpiryYear = year;
@@ -148,11 +150,14 @@ public class PostPaymentRequestValidatorTests
         result.ShouldHaveValidationErrorFor(x => x.ExpiryYear);
     }
 
-    [Fact]
-    public void ExpiryYear_WhenPositive_PassesValidation()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2027)]
+    [InlineData(9999)]
+    public void ExpiryYear_WhenInRange_PassesValidation(int year)
     {
         var request = CreateValidRequest();
-        request.ExpiryYear = 2027;
+        request.ExpiryYear = year;
 
         var result = _validator.TestValidate(request);
 
