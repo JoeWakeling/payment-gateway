@@ -34,7 +34,7 @@ Application    → Domain
 Domain         → (nothing)
 ```
 
-Api is the composition root — it references Infrastructure only to wire up DI registrations (e.g. `IPaymentsRepository` → `PaymentsRepository`), never to use concrete types directly. Application defines the interfaces that Infrastructure implements; Application itself depends only on Domain and its own abstractions, never on concrete infrastructure. This keeps core business rules decoupled from how the bank is actually called or payments actually stored.
+Api is the composition root — it references Infrastructure only to wire up DI registrations (e.g. `IPaymentsRepository` → `InMemoryPaymentsRepository`), never to use concrete types directly. Application defines the interfaces that Infrastructure implements; Application itself depends only on Domain and its own abstractions, never on concrete infrastructure. This keeps core business rules decoupled from how the bank is actually called or payments actually stored.
 
 ### Why not fewer projects
 A single project with folders would have been an equally legitimate, simpler choice. Four projects was chosen to make dependency boundaries compiler-enforced (e.g. Domain genuinely can't reference Infrastructure) rather than relying on folder discipline
@@ -62,6 +62,16 @@ No retry logic was implemented for bank communication failures. In production, t
 
 ### Idempotency
 Not implemented, as the bank simulator has no support for idempotency keys. In production this would be important — perhaps an idempotency key passed through to the bank so that retried requests can't result in duplicate charges.
+
+## Persistence
+
+`InMemoryPaymentsRepository` stands in for real persistence. It sits behind `IPaymentsRepository`, so a database-backed version could be swapped in through DI without touching Application.
+
+### Thread safety
+The repository is registered as a singleton, so ASP.NET Core requests hit it concurrently. The provided `List<T>`-backed version could lose writes or throw under concurrent adds, so it was replaced with a `ConcurrentDictionary<Guid, Payment>`. Keying by payment id also makes `GetAsync` an O(1) lookup, instead of the O(n) scan the list needed.
+
+### Async interface
+`AddAsync`/`GetAsync` return `Task` even though the in-memory implementation completes synchronously. A real database call would be I/O-bound and async, so the interface matches that now, and a database-backed implementation won't force signature changes through the service and controller. It also keeps the pipeline consistently async alongside the acquiring bank client.
 
 ## Logging
 
