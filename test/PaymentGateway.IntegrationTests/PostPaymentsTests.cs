@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,6 +17,11 @@ namespace PaymentGateway.IntegrationTests;
 
 public class PostPaymentsTests
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() }
+    };
+
     private static PostPaymentRequest CreateValidRequest() => new()
     {
         CardNumber = "2222405343248877",
@@ -33,9 +40,10 @@ public class PostPaymentsTests
             .CreateClient();
 
     [Theory]
-    [InlineData(true, PaymentStatus.Authorized)]
-    [InlineData(false, PaymentStatus.Declined)]
-    public async Task ProcessesPaymentAndReturnsStatusFromBank(bool authorized, PaymentStatus expectedStatus)
+    [InlineData(true, PaymentStatus.Authorized, "Authorized")]
+    [InlineData(false, PaymentStatus.Declined, "Declined")]
+    public async Task ProcessesPaymentAndReturnsStatusFromBank(bool authorized, PaymentStatus expectedStatus,
+        string expectedStatusJson)
     {
         // Arrange
         var bankClient = new StubAcquiringBankClient(new AcquiringBankPaymentResponse(authorized, null));
@@ -45,13 +53,15 @@ public class PostPaymentsTests
         // Act
         var response = await client.PostAsJsonAsync("/api/Payments", request, TestContext.Current.CancellationToken);
         var paymentResponse =
-            await response.Content.ReadFromJsonAsync<PostPaymentResponse>(TestContext.Current.CancellationToken);
+            await response.Content.ReadFromJsonAsync<PostPaymentResponse>(JsonOptions, TestContext.Current.CancellationToken);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(paymentResponse);
         Assert.NotEqual(Guid.Empty, paymentResponse.Id);
         Assert.Equal(expectedStatus, paymentResponse.Status);
+        Assert.Equal(expectedStatusJson, json.RootElement.GetProperty("status").GetString());
         Assert.Equal(8877, paymentResponse.CardNumberLastFour);
         Assert.Equal(request.ExpiryMonth, paymentResponse.ExpiryMonth);
         Assert.Equal(request.ExpiryYear, paymentResponse.ExpiryYear);
@@ -70,11 +80,11 @@ public class PostPaymentsTests
         var postResponse = await client.PostAsJsonAsync("/api/Payments", CreateValidRequest(),
             TestContext.Current.CancellationToken);
         var postPaymentResponse =
-            await postResponse.Content.ReadFromJsonAsync<PostPaymentResponse>(TestContext.Current.CancellationToken);
+            await postResponse.Content.ReadFromJsonAsync<PostPaymentResponse>(JsonOptions, TestContext.Current.CancellationToken);
         var getResponse = await client.GetAsync($"/api/Payments/{postPaymentResponse!.Id}",
             TestContext.Current.CancellationToken);
         var getPaymentResponse =
-            await getResponse.Content.ReadFromJsonAsync<GetPaymentResponse>(TestContext.Current.CancellationToken);
+            await getResponse.Content.ReadFromJsonAsync<GetPaymentResponse>(JsonOptions, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
