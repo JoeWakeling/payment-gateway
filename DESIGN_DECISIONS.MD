@@ -39,6 +39,9 @@ Api is the composition root — it references Infrastructure only to wire up DI 
 ### Why not fewer projects
 A single project with folders would have been an equally legitimate, simpler choice. Four projects was chosen to make dependency boundaries compiler-enforced (e.g. Domain genuinely can't reference Infrastructure) rather than relying on folder discipline
 
+### Mapping between layers
+Mapping between models is done inline in the methods that need it: the controller maps request/response DTOs, `PaymentsService` maps to the bank request and `Payment`, and `AcquiringBankClient` maps to/from the simulator's DTOs. There are no dedicated mapper classes or mapping libraries (e.g. AutoMapper). Each mapping is only used in one place and is a simple property-by-property copy, so a separate abstraction would add indirection without removing any duplication. In a bigger project, with more endpoints reusing the same models or more complex transformations, extracting mappers (or extension methods) would become worthwhile.
+
 ## Validation
 
 Two-step validation for the payment processing request, split across layers:
@@ -48,7 +51,9 @@ Two-step validation for the payment processing request, split across layers:
 
 Currency is validated case-insensitively against 3 currencies (GBP, USD, EUR) at the shape layer, then normalised to uppercase in Application — so `"gbp"` and `"GBP"`, for example, are both valid.
 
-Both failure paths return the same `Rejected` response — this 2-step validation process is opaque to the caller.
+Request shape failures return `400 Bad Request` with the FluentValidation errors as a validation problem response.
+
+Business rule failures throw a `PaymentRejectedException` (rather than a generic `ArgumentException`), which the controller maps to `422 Unprocessable Entity` with a `ProblemDetails` body (e.g. `"detail": "Rejected: card has expired"`). The request was well-formed, so `422` keeps it distinct from shape failures, and the bank is never called.
 
 ## Acquiring bank client
 
@@ -56,6 +61,8 @@ Both failure paths return the same `Rejected` response — this 2-step validatio
 
 ### Failure mapping
 A `200 OK` authorization decision (authorized or declined) is returned as an `AcquiringBankPaymentResponse`. A `503 Service Unavailable` is an expected outcome per the simulator spec, so it is thrown as a distinct `AcquiringBankUnavailableException`, letting orchestration map "bank unavailable" separately from authorized/declined. Anything else — other status codes, network errors, timeouts, malformed/empty bodies — is thrown as the base `AcquiringBankException`, so callers never need to know about HTTP. A `400` falls into this bucket deliberately: the simulator only returns it for incomplete requests, which our own validation should prevent, so it would indicate a gateway bug rather than a business outcome. Cancellation requested by the caller is not wrapped and propagates as `OperationCanceledException`.
+
+`PaymentsService` catches any `AcquiringBankException` (including the unavailable case) and treats it as `Declined`: without an authorization decision from the bank the payment can't be considered authorized, so it's stored and returned as declined (`200 OK`) rather than surfacing as a `500`. The client still logs the underlying failure at Warning, so bank outages stay visible.
 
 ### Retries
 No retry logic was implemented for bank communication failures. In production, transient failures (network errors, 503s) would typically warrant a retry policy with backoff (e.g. via Polly), but the bank simulator's 503 response is deterministic based on card number rather than transient, so retries wouldn't change the outcome in this test harness. Idempotency would also need considering before adding retries to a payment flow, to avoid double-charging on a retried request that actually succeeded.
@@ -80,5 +87,6 @@ Serilog is used because the built-in `Microsoft.Extensions.Logging` has no file 
 What's logged:
 - **Every request:** method, path, status code and duration, plus unhandled exceptions.
 - **Acquiring bank calls:** the authorized/declined decision with latency, and every failure (503, bad status, bad body, network error, timeout) at Warning.
-- **Payments:** stored or rejected, with the `PaymentId`.
+- **Validation failures:** each field name and error message, never the attempted values.
+- **Payments:** stored or rejected, with the `PaymentId`; lookups for unknown payment ids.
 - **Never logged:** card number and CVV, checked by a test.

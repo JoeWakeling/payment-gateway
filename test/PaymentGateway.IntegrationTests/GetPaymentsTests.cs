@@ -1,12 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 
 using PaymentGateway.Api.Controllers;
 using PaymentGateway.Api.Models.Responses;
-using PaymentGateway.Application;
 using PaymentGateway.Application.Interfaces;
 using PaymentGateway.Domain;
 using PaymentGateway.Infrastructure;
@@ -15,6 +15,11 @@ namespace PaymentGateway.IntegrationTests;
 
 public class GetPaymentsTests
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() }
+    };
+
     private readonly Random _random = new();
 
     [Fact]
@@ -24,6 +29,7 @@ public class GetPaymentsTests
         var payment = new Payment
         {
             Id = Guid.NewGuid(),
+            Status = PaymentStatus.Declined,
             ExpiryYear = _random.Next(2023, 2030),
             ExpiryMonth = _random.Next(1, 12),
             Amount = _random.Next(1, 10000),
@@ -33,22 +39,29 @@ public class GetPaymentsTests
 
         var paymentsRepository = new InMemoryPaymentsRepository();
         await paymentsRepository.AddAsync(payment, TestContext.Current.CancellationToken);
-        var paymentsService = new PaymentsService(paymentsRepository, TimeProvider.System, NullLogger<PaymentsService>.Instance);
 
         var webApplicationFactory = new WebApplicationFactory<PaymentsController>();
         var client = webApplicationFactory.WithWebHostBuilder(builder =>
-            builder.ConfigureServices(services => ((ServiceCollection)services)
-                .AddSingleton<IPaymentsRepository>(paymentsRepository)
-                .AddSingleton<IPaymentsService>(paymentsService)))
+            builder.ConfigureServices(services => services
+                .AddSingleton<IPaymentsRepository>(paymentsRepository)))
             .CreateClient();
 
         // Act
         var response = await client.GetAsync($"/api/Payments/{payment.Id}", TestContext.Current.CancellationToken);
-        var paymentResponse = await response.Content.ReadFromJsonAsync<PostPaymentResponse>(TestContext.Current.CancellationToken);
+        var paymentResponse = await response.Content.ReadFromJsonAsync<GetPaymentResponse>(JsonOptions, TestContext.Current.CancellationToken);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(paymentResponse);
+        Assert.Equal(payment.Id, paymentResponse.Id);
+        Assert.Equal(payment.Status, paymentResponse.Status);
+        Assert.Equal("Declined", json.RootElement.GetProperty("status").GetString());
+        Assert.Equal(payment.CardNumberLastFour, paymentResponse.CardNumberLastFour);
+        Assert.Equal(payment.ExpiryMonth, paymentResponse.ExpiryMonth);
+        Assert.Equal(payment.ExpiryYear, paymentResponse.ExpiryYear);
+        Assert.Equal(payment.Currency, paymentResponse.Currency);
+        Assert.Equal(payment.Amount, paymentResponse.Amount);
     }
 
     [Fact]

@@ -1,9 +1,10 @@
+using PaymentGateway.Application.Models;
 using PaymentGateway.Domain;
 
 namespace PaymentGateway.Application.Interfaces;
 
 public interface IPaymentsService
 {
-    public Task AddAsync(Payment payment, CancellationToken cancellationToken);
-    public Task<Payment?> GetAsync(Guid id, CancellationToken cancellationToken);
+    public Task<Payment> ProcessPaymentAsync(ProcessPaymentRequest request, CancellationToken cancellationToken);
+    public Task<Payment?> GetPaymentByIdAsync(Guid id, CancellationToken cancellationToken);
 }
