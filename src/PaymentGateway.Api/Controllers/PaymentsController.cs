@@ -5,8 +5,10 @@ using Microsoft.AspNetCore.Mvc;
 
 using PaymentGateway.Api.Models.Requests;
 using PaymentGateway.Api.Models.Responses;
+using PaymentGateway.Application.Exceptions;
 using PaymentGateway.Application.Interfaces;
 using PaymentGateway.Application.Models;
+using PaymentGateway.Domain;
 
 namespace PaymentGateway.Api.Controllers;
 
@@ -43,7 +45,16 @@ public class PaymentsController(
             request.Amount,
             request.Cvv);
 
-        var payment = await paymentsService.ProcessPaymentAsync(processPaymentRequest, cancellationToken);
+        Payment payment;
+        try
+        {
+            payment = await paymentsService.ProcessPaymentAsync(processPaymentRequest, cancellationToken);
+        }
+        catch (PaymentRejectedException ex)
+        {
+            return Problem(detail: ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity,
+                title: "Payment rejected");
+        }
 
         var response = new PostPaymentResponse
         {

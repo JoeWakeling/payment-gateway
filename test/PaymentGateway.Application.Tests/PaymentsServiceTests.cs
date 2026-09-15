@@ -212,43 +212,43 @@ public class PaymentsServiceTests
     }
 
     [Fact]
-    public async Task ProcessPaymentAsync_CardExpiredInPreviousMonth_ThrowsArgumentException()
+    public async Task ProcessPaymentAsync_CardExpiredInPreviousMonth_ThrowsPaymentRejectedException()
     {
         // Arrange
         SetupNow(2024, 6, 1);
         var request = CreateRequest(expiryMonth: 5, expiryYear: 2024);
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<ArgumentException>(
+        var exception = await Assert.ThrowsAsync<PaymentRejectedException>(
             () => _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken));
-        Assert.Equal("Payment card has expired.", exception.Message);
+        Assert.Equal("Rejected: card has expired", exception.Message);
         VerifyNotProcessed();
         VerifyLogged(LogLevel.Information, "Payment rejected: card expired");
     }
 
     [Fact]
-    public async Task ProcessPaymentAsync_CardExpiredInPreviousYear_ThrowsArgumentException()
+    public async Task ProcessPaymentAsync_CardExpiredInPreviousYear_ThrowsPaymentRejectedException()
     {
         // Arrange
         SetupNow(2024, 3, 10);
         var request = CreateRequest(expiryMonth: 12, expiryYear: 2023);
 
         // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(
+        await Assert.ThrowsAsync<PaymentRejectedException>(
             () => _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken));
         VerifyNotProcessed();
         VerifyLogged(LogLevel.Information, "Payment rejected: card expired");
     }
 
     [Fact]
-    public async Task ProcessPaymentAsync_CardExpiredOnLastDayOfExpiryMonth_ThrowsArgumentException()
+    public async Task ProcessPaymentAsync_CardExpiredOnLastDayOfExpiryMonth_ThrowsPaymentRejectedException()
     {
         // Arrange — first day after expiry month
         SetupNow(2024, 2, 1);
         var request = CreateRequest(expiryMonth: 1, expiryYear: 2024);
 
         // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(
+        await Assert.ThrowsAsync<PaymentRejectedException>(
             () => _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken));
         VerifyNotProcessed();
         VerifyLogged(LogLevel.Information, "Payment rejected: card expired");

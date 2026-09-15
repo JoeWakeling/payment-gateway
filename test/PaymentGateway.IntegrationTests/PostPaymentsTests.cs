@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -108,6 +109,29 @@ public class PostPaymentsTests
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(bankClient.Requests);
+    }
+
+    [Fact]
+    public async Task Returns422AndDoesNotCallBankIfCardExpired()
+    {
+        // Arrange
+        var bankClient = new StubAcquiringBankClient(new AcquiringBankPaymentResponse(true, "auth-code"));
+        var client = CreateClient(bankClient);
+        var request = CreateValidRequest();
+        request.ExpiryYear = DateTime.UtcNow.Year - 1;
+
+        // Act
+        var response = await client.PostAsJsonAsync("/api/Payments", request, TestContext.Current.CancellationToken);
+        var problemDetails =
+            await response.Content.ReadFromJsonAsync<ProblemDetails>(JsonOptions, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.NotNull(problemDetails);
+        Assert.Equal("Payment rejected", problemDetails.Title);
+        Assert.Equal("Rejected: card has expired", problemDetails.Detail);
         Assert.Empty(bankClient.Requests);
     }
 

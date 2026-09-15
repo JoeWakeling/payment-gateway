@@ -1,6 +1,7 @@
 using FluentValidation;
 using FluentValidation.Results;
 
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
@@ -10,6 +11,7 @@ using Moq;
 using PaymentGateway.Api.Controllers;
 using PaymentGateway.Api.Models.Requests;
 using PaymentGateway.Api.Models.Responses;
+using PaymentGateway.Application.Exceptions;
 using PaymentGateway.Application.Interfaces;
 using PaymentGateway.Application.Models;
 using PaymentGateway.Domain;
@@ -182,6 +184,26 @@ public class PaymentsControllerTests
             GetStateValue(record, "ValidationErrors"));
         Assert.DoesNotContain(request.CardNumber, record.Message);
         Assert.DoesNotContain(request.Cvv, record.Message);
+    }
+
+    [Fact]
+    public async Task PostPaymentAsync_WhenPaymentRejected_ReturnsUnprocessableEntityProblem()
+    {
+        // Arrange
+        _paymentsService
+            .Setup(s => s.ProcessPaymentAsync(It.IsAny<ProcessPaymentRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new PaymentRejectedException("card has expired"));
+
+        // Act
+        var result = await _sut.PostPaymentAsync(CreateRequest(), TestContext.Current.CancellationToken);
+
+        // Assert
+        var objectResult = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status422UnprocessableEntity, objectResult.StatusCode);
+        var problemDetails = Assert.IsType<ProblemDetails>(objectResult.Value);
+        Assert.Equal(StatusCodes.Status422UnprocessableEntity, problemDetails.Status);
+        Assert.Equal("Payment rejected", problemDetails.Title);
+        Assert.Equal("Rejected: card has expired", problemDetails.Detail);
     }
 
     // GetPaymentAsync tests
