@@ -10,6 +10,7 @@ public class StubAcquiringBankHandler : HttpMessageHandler
     private readonly ConcurrentQueue<ReceivedRequest> _requests = new();
     private HttpStatusCode _statusCode = HttpStatusCode.OK;
     private bool _authorized = true;
+    private Exception? _exception;
 
     public IReadOnlyCollection<ReceivedRequest> Requests => _requests;
 
@@ -21,6 +22,8 @@ public class StubAcquiringBankHandler : HttpMessageHandler
 
     public void RespondWithStatusCode(HttpStatusCode statusCode) => _statusCode = statusCode;
 
+    public void ThrowOnSend(Exception exception) => _exception = exception;
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
@@ -28,6 +31,11 @@ public class StubAcquiringBankHandler : HttpMessageHandler
             ? null
             : JsonNode.Parse(await request.Content.ReadAsStringAsync(cancellationToken));
         _requests.Enqueue(new ReceivedRequest(request.Method, request.RequestUri!, body));
+
+        if (_exception is not null)
+        {
+            throw _exception;
+        }
 
         if (_statusCode != HttpStatusCode.OK)
         {
