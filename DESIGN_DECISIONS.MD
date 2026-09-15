@@ -39,6 +39,9 @@ Api is the composition root — it references Infrastructure only to wire up DI 
 ### Why not fewer projects
 A single project with folders would have been an equally legitimate, simpler choice. Four projects was chosen to make dependency boundaries compiler-enforced (e.g. Domain genuinely can't reference Infrastructure) rather than relying on folder discipline
 
+### Mapping between layers
+Mapping between models is done inline in the methods that need it: the controller maps request/response DTOs, `PaymentsService` maps to the bank request and `Payment`, and `AcquiringBankClient` maps to/from the simulator's DTOs. There are no dedicated mapper classes or mapping libraries (e.g. AutoMapper). Each mapping is only used in one place and is a simple property-by-property copy, so a separate abstraction would add indirection without removing any duplication. In a bigger project, with more endpoints reusing the same models or more complex transformations, extracting mappers (or extension methods) would become worthwhile.
+
 ## Validation
 
 Two-step validation for the payment processing request, split across layers:
