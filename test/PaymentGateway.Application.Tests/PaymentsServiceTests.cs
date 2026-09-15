@@ -128,18 +128,55 @@ public class PaymentsServiceTests
             Times.Once);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ProcessPaymentAsync_BankFails_StoresAndReturnsDeclinedPayment(bool bankUnavailable)
+    {
+        // Arrange
+        SetupNow(2024, 1, 15);
+        var exception = bankUnavailable
+            ? new AcquiringBankUnavailableException("Acquiring bank is unavailable.")
+            : new AcquiringBankException("Failed to communicate with the acquiring bank.", new HttpRequestException());
+        _acquiringBankClient
+            .Setup(c => c.ProcessPaymentAsync(It.IsAny<AcquiringBankPaymentRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(exception);
+        var request = CreateRequest(expiryMonth: 2, expiryYear: 2024);
+
+        // Act
+        var payment = await _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(request.Id, payment.Id);
+        Assert.Equal(PaymentStatus.Declined, payment.Status);
+        Assert.Equal(8877, payment.CardNumberLastFour);
+        _paymentsRepository.Verify(r => r.AddAsync(payment, TestContext.Current.CancellationToken), Times.Once);
+        var records = _logger.Collector.GetSnapshot();
+        Assert.Collection(records,
+            r =>
+            {
+                Assert.Equal(LogLevel.Warning, r.Level);
+                Assert.Equal("Acquiring bank did not return an authorization decision; declining payment", r.Message);
+            },
+            r =>
+            {
+                Assert.Equal(LogLevel.Information, r.Level);
+                Assert.Equal("Payment stored with status Declined", r.Message);
+            });
+    }
+
     [Fact]
-    public async Task ProcessPaymentAsync_BankThrows_DoesNotStorePayment()
+    public async Task ProcessPaymentAsync_CancelledDuringBankCall_PropagatesAndDoesNotStorePayment()
     {
         // Arrange
         SetupNow(2024, 1, 15);
         _acquiringBankClient
             .Setup(c => c.ProcessPaymentAsync(It.IsAny<AcquiringBankPaymentRequest>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new AcquiringBankUnavailableException("Acquiring bank is unavailable."));
+            .ThrowsAsync(new OperationCanceledException());
         var request = CreateRequest(expiryMonth: 2, expiryYear: 2024);
 
         // Act & Assert
-        await Assert.ThrowsAsync<AcquiringBankUnavailableException>(
+        await Assert.ThrowsAsync<OperationCanceledException>(
             () => _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken));
         _paymentsRepository.Verify(r => r.AddAsync(It.IsAny<Payment>(), It.IsAny<CancellationToken>()), Times.Never);
     }
