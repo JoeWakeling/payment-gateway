@@ -32,7 +32,7 @@ public class PaymentsService(
         {
             Id = request.Id,
             Status = authorized ? PaymentStatus.Authorized : PaymentStatus.Declined,
-            CardNumberLastFour = int.Parse(request.CardNumber[^4..]),
+            CardNumberLastFour = request.CardNumber[^4..],
             ExpiryMonth = request.ExpiryMonth,
             ExpiryYear = request.ExpiryYear,
             Currency = currency,

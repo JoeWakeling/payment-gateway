@@ -64,11 +64,29 @@ public class PostPaymentsTests
         Assert.NotEqual(Guid.Empty, paymentResponse.Id);
         Assert.Equal(expectedStatus, paymentResponse.Status);
         Assert.Equal(expectedStatusJson, json.RootElement.GetProperty("status").GetString());
-        Assert.Equal(8877, paymentResponse.CardNumberLastFour);
+        Assert.Equal("8877", paymentResponse.CardNumberLastFour);
         Assert.Equal(request.ExpiryMonth, paymentResponse.ExpiryMonth);
         Assert.Equal(request.ExpiryYear, paymentResponse.ExpiryYear);
         Assert.Equal("GBP", paymentResponse.Currency);
         Assert.Equal(request.Amount, paymentResponse.Amount);
+    }
+
+    [Fact]
+    public async Task ReturnsCardNumberLastFourWithLeadingZeros()
+    {
+        // Arrange
+        var bankClient = new StubAcquiringBankClient(new AcquiringBankPaymentResponse(true, "auth-code"));
+        var client = CreateClient(bankClient);
+        var request = CreateValidRequest();
+        request.CardNumber = "2222405343240012";
+
+        // Act
+        var response = await client.PostAsJsonAsync("/api/Payments", request, TestContext.Current.CancellationToken);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("0012", json.RootElement.GetProperty("cardNumberLastFour").GetString());
     }
 
     [Fact]
