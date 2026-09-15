@@ -191,13 +191,13 @@ public class PaymentsControllerTests
     {
         // Arrange
         var payment = CreatePayment(Guid.NewGuid());
-        _paymentsService.Setup(s => s.GetPaymentById(payment.Id)).Returns(payment);
+        _paymentsService.Setup(s => s.GetPaymentByIdAsync(payment.Id, TestContext.Current.CancellationToken)).ReturnsAsync(payment);
 
         // Act
-        var result = await _sut.GetPaymentAsync(payment.Id);
+        var result = await _sut.GetPaymentAsync(payment.Id, TestContext.Current.CancellationToken);
 
         // Assert
-        _paymentsService.Verify(s => s.GetPaymentById(payment.Id), Times.Once);
+        _paymentsService.Verify(s => s.GetPaymentByIdAsync(payment.Id, TestContext.Current.CancellationToken), Times.Once);
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var response = Assert.IsType<GetPaymentResponse>(okResult.Value);
         Assert.Equal(payment.Id, response.Id);
@@ -215,13 +215,13 @@ public class PaymentsControllerTests
     {
         // Arrange
         var paymentId = Guid.NewGuid();
-        _paymentsService.Setup(s => s.GetPaymentById(paymentId)).Returns((Payment?)null);
+        _paymentsService.Setup(s => s.GetPaymentByIdAsync(paymentId, TestContext.Current.CancellationToken)).ReturnsAsync((Payment?)null);
 
         // Act
-        var result = await _sut.GetPaymentAsync(paymentId);
+        var result = await _sut.GetPaymentAsync(paymentId, TestContext.Current.CancellationToken);
 
         // Assert
-        _paymentsService.Verify(s => s.GetPaymentById(paymentId), Times.Once);
+        _paymentsService.Verify(s => s.GetPaymentByIdAsync(paymentId, TestContext.Current.CancellationToken), Times.Once);
         Assert.IsType<NotFoundResult>(result.Result);
         var record = Assert.Single(_logger.Collector.GetSnapshot());
         Assert.Equal(LogLevel.Information, record.Level);

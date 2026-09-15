@@ -61,7 +61,7 @@ public class PaymentsServiceTests
         _acquiringBankClient.Verify(
             c => c.ProcessPaymentAsync(It.IsAny<AcquiringBankPaymentRequest>(), It.IsAny<CancellationToken>()),
             Times.Never);
-        _paymentsRepository.Verify(r => r.Add(It.IsAny<Payment>()), Times.Never);
+        _paymentsRepository.Verify(r => r.AddAsync(It.IsAny<Payment>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -82,7 +82,7 @@ public class PaymentsServiceTests
         Assert.Equal(request.ExpiryYear, payment.ExpiryYear);
         Assert.Equal(request.Currency, payment.Currency);
         Assert.Equal(request.Amount, payment.Amount);
-        _paymentsRepository.Verify(r => r.Add(payment), Times.Once);
+        _paymentsRepository.Verify(r => r.AddAsync(payment, TestContext.Current.CancellationToken), Times.Once);
         VerifyLogged(LogLevel.Information, "Payment stored with status Authorized");
         var scope = Assert.IsType<Dictionary<string, object>>(Assert.Single(_logger.LatestRecord.Scopes));
         Assert.Equal(request.Id, scope["PaymentId"]);
@@ -101,7 +101,7 @@ public class PaymentsServiceTests
 
         // Assert
         Assert.Equal(PaymentStatus.Declined, payment.Status);
-        _paymentsRepository.Verify(r => r.Add(payment), Times.Once);
+        _paymentsRepository.Verify(r => r.AddAsync(payment, TestContext.Current.CancellationToken), Times.Once);
         VerifyLogged(LogLevel.Information, "Payment stored with status Declined");
     }
 
@@ -141,7 +141,7 @@ public class PaymentsServiceTests
         // Act & Assert
         await Assert.ThrowsAsync<AcquiringBankUnavailableException>(
             () => _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken));
-        _paymentsRepository.Verify(r => r.Add(It.IsAny<Payment>()), Times.Never);
+        _paymentsRepository.Verify(r => r.AddAsync(It.IsAny<Payment>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -155,7 +155,7 @@ public class PaymentsServiceTests
         var payment = await _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
-        _paymentsRepository.Verify(r => r.Add(payment), Times.Once);
+        _paymentsRepository.Verify(r => r.AddAsync(payment, TestContext.Current.CancellationToken), Times.Once);
         VerifyLogged(LogLevel.Information, "Payment stored with status Authorized");
     }
 
@@ -170,7 +170,7 @@ public class PaymentsServiceTests
         var payment = await _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
-        _paymentsRepository.Verify(r => r.Add(payment), Times.Once);
+        _paymentsRepository.Verify(r => r.AddAsync(payment, TestContext.Current.CancellationToken), Times.Once);
         VerifyLogged(LogLevel.Information, "Payment stored with status Authorized");
     }
 
