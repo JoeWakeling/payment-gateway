@@ -2,6 +2,9 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
+
 using PaymentGateway.Application.Exceptions;
 using PaymentGateway.Application.Interfaces;
 using PaymentGateway.Application.Models;
@@ -26,9 +29,10 @@ public class AcquiringBankClientTests
         Content = new StringContent(body, Encoding.UTF8, "application/json")
     };
 
-    private static (IAcquiringBankClient Client, StubHttpMessageHandler Handler) CreateClient(
-        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler,
-        TimeSpan? timeout = null)
+    private static (IAcquiringBankClient Client, StubHttpMessageHandler Handler, FakeLogger<AcquiringBankClient> Logger)
+        CreateClient(
+            Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler,
+            TimeSpan? timeout = null)
     {
         var stubHandler = new StubHttpMessageHandler(handler);
         var httpClient = new HttpClient(stubHandler) { BaseAddress = BaseAddress };
@@ -37,18 +41,21 @@ public class AcquiringBankClientTests
             httpClient.Timeout = timeout.Value;
         }
 
-        return (new AcquiringBankClient(httpClient), stubHandler);
+        var logger = new FakeLogger<AcquiringBankClient>();
+
+        return (new AcquiringBankClient(httpClient, logger), stubHandler, logger);
     }
 
-    private static (IAcquiringBankClient Client, StubHttpMessageHandler Handler) CreateClient(
-        HttpStatusCode statusCode, string body) =>
+    private static (IAcquiringBankClient Client, StubHttpMessageHandler Handler, FakeLogger<AcquiringBankClient> Logger)
+        CreateClient(HttpStatusCode statusCode, string body) =>
         CreateClient((_, _) => Task.FromResult(JsonResponse(statusCode, body)));
 
     [Fact]
     public async Task ProcessPaymentAsync_ValidRequest_PostsSnakeCaseBodyToPaymentsEndpoint()
     {
         // Arrange
-        var (client, handler) = CreateClient(HttpStatusCode.OK, """{"authorized":true,"authorization_code":"abc"}""");
+        var (client, handler, _) =
+            CreateClient(HttpStatusCode.OK, """{"authorized":true,"authorization_code":"abc"}""");
 
         // Act
         await client.ProcessPaymentAsync(CreateRequest(), TestContext.Current.CancellationToken);
@@ -75,7 +82,8 @@ public class AcquiringBankClientTests
         int expiryMonth, int expiryYear, string expected)
     {
         // Arrange
-        var (client, handler) = CreateClient(HttpStatusCode.OK, """{"authorized":true,"authorization_code":"abc"}""");
+        var (client, handler, _) =
+            CreateClient(HttpStatusCode.OK, """{"authorized":true,"authorization_code":"abc"}""");
 
         // Act
         await client.ProcessPaymentAsync(CreateRequest(expiryMonth, expiryYear), TestContext.Current.CancellationToken);
@@ -89,7 +97,7 @@ public class AcquiringBankClientTests
     public async Task ProcessPaymentAsync_BankAuthorizes_ReturnsAuthorizedWithCode()
     {
         // Arrange
-        var (client, _) = CreateClient(HttpStatusCode.OK,
+        var (client, _, logger) = CreateClient(HttpStatusCode.OK,
             """{"authorized":true,"authorization_code":"0bb07405-6d44-4b50-a14f-7ae0beff13ad"}""");
 
         // Act
@@ -98,30 +106,37 @@ public class AcquiringBankClientTests
         // Assert
         Assert.True(result.Authorized);
         Assert.Equal("0bb07405-6d44-4b50-a14f-7ae0beff13ad", result.AuthorizationCode);
+        var record = Assert.Single(logger.Collector.GetSnapshot(), r => r.Level == LogLevel.Information);
+        Assert.Equal("True", record.GetStructuredStateValue("Authorized"));
+        Assert.NotNull(record.GetStructuredStateValue("ElapsedMs"));
     }
 
     [Fact]
     public async Task ProcessPaymentAsync_BankDeclines_ReturnsUnauthorized()
     {
         // Arrange
-        var (client, _) = CreateClient(HttpStatusCode.OK, """{"authorized":false,"authorization_code":""}""");
+        var (client, _, logger) = CreateClient(HttpStatusCode.OK, """{"authorized":false,"authorization_code":""}""");
 
         // Act
         var result = await client.ProcessPaymentAsync(CreateRequest(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.Authorized);
+        var record = Assert.Single(logger.Collector.GetSnapshot(), r => r.Level == LogLevel.Information);
+        Assert.Equal("False", record.GetStructuredStateValue("Authorized"));
     }
 
     [Fact]
     public async Task ProcessPaymentAsync_ServiceUnavailable_ThrowsAcquiringBankUnavailableException()
     {
         // Arrange
-        var (client, _) = CreateClient(HttpStatusCode.ServiceUnavailable, "{}");
+        var (client, _, logger) = CreateClient(HttpStatusCode.ServiceUnavailable, "{}");
 
         // Act & Assert
         await Assert.ThrowsAsync<AcquiringBankUnavailableException>(() =>
             client.ProcessPaymentAsync(CreateRequest(), TestContext.Current.CancellationToken));
+        var record = Assert.Single(logger.Collector.GetSnapshot(), r => r.Level == LogLevel.Warning);
+        Assert.Contains("unavailable", record.Message);
     }
 
     [Theory]
@@ -133,34 +148,42 @@ public class AcquiringBankClientTests
         HttpStatusCode statusCode, string body)
     {
         // Arrange
-        var (client, _) = CreateClient(statusCode, body);
+        var (client, _, logger) = CreateClient(statusCode, body);
 
         // Act & Assert
         var exception =
-            await Assert.ThrowsAsync<AcquiringBankException>(() => client.ProcessPaymentAsync(CreateRequest(), TestContext.Current.CancellationToken));
+            await Assert.ThrowsAsync<AcquiringBankException>(() =>
+                client.ProcessPaymentAsync(CreateRequest(), TestContext.Current.CancellationToken));
         Assert.Contains(((int)statusCode).ToString(), exception.Message);
+        var record = Assert.Single(logger.Collector.GetSnapshot(), r => r.Level == LogLevel.Warning);
+        Assert.Equal(((int)statusCode).ToString(), record.GetStructuredStateValue("StatusCode"));
     }
 
     [Fact]
     public async Task ProcessPaymentAsync_NullResponseBody_ThrowsAcquiringBankException()
     {
         // Arrange
-        var (client, _) = CreateClient(HttpStatusCode.OK, "null");
+        var (client, _, logger) = CreateClient(HttpStatusCode.OK, "null");
 
         // Act & Assert
-        await Assert.ThrowsAsync<AcquiringBankException>(() => client.ProcessPaymentAsync(CreateRequest(), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<AcquiringBankException>(() =>
+            client.ProcessPaymentAsync(CreateRequest(), TestContext.Current.CancellationToken));
+        Assert.Single(logger.Collector.GetSnapshot(), r => r.Level == LogLevel.Warning);
     }
 
     [Fact]
     public async Task ProcessPaymentAsync_MalformedResponseBody_ThrowsAcquiringBankException()
     {
         // Arrange
-        var (client, _) = CreateClient(HttpStatusCode.OK, "not json");
+        var (client, _, logger) = CreateClient(HttpStatusCode.OK, "not json");
 
         // Act & Assert
         var exception =
-            await Assert.ThrowsAsync<AcquiringBankException>(() => client.ProcessPaymentAsync(CreateRequest(), TestContext.Current.CancellationToken));
+            await Assert.ThrowsAsync<AcquiringBankException>(() =>
+                client.ProcessPaymentAsync(CreateRequest(), TestContext.Current.CancellationToken));
         Assert.IsType<JsonException>(exception.InnerException);
+        var record = Assert.Single(logger.Collector.GetSnapshot(), r => r.Level == LogLevel.Warning);
+        Assert.Same(exception.InnerException, record.Exception);
     }
 
     [Fact]
@@ -168,19 +191,22 @@ public class AcquiringBankClientTests
     {
         // Arrange
         var httpRequestException = new HttpRequestException("Connection refused");
-        var (client, _) = CreateClient((_, _) => throw httpRequestException);
+        var (client, _, logger) = CreateClient((_, _) => throw httpRequestException);
 
         // Act & Assert
         var exception =
-            await Assert.ThrowsAsync<AcquiringBankException>(() => client.ProcessPaymentAsync(CreateRequest(), TestContext.Current.CancellationToken));
+            await Assert.ThrowsAsync<AcquiringBankException>(() =>
+                client.ProcessPaymentAsync(CreateRequest(), TestContext.Current.CancellationToken));
         Assert.Same(httpRequestException, exception.InnerException);
+        var record = Assert.Single(logger.Collector.GetSnapshot(), r => r.Level == LogLevel.Warning);
+        Assert.Same(httpRequestException, record.Exception);
     }
 
     [Fact]
     public async Task ProcessPaymentAsync_HttpClientTimesOut_ThrowsAcquiringBankException()
     {
         // Arrange
-        var (client, _) = CreateClient(async (_, ct) =>
+        var (client, _, logger) = CreateClient(async (_, ct) =>
         {
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
             return new HttpResponseMessage(HttpStatusCode.OK);
@@ -188,8 +214,11 @@ public class AcquiringBankClientTests
 
         // Act & Assert
         var exception =
-            await Assert.ThrowsAsync<AcquiringBankException>(() => client.ProcessPaymentAsync(CreateRequest(), TestContext.Current.CancellationToken));
+            await Assert.ThrowsAsync<AcquiringBankException>(() =>
+                client.ProcessPaymentAsync(CreateRequest(), TestContext.Current.CancellationToken));
         Assert.IsAssignableFrom<OperationCanceledException>(exception.InnerException);
+        var record = Assert.Single(logger.Collector.GetSnapshot(), r => r.Level == LogLevel.Warning);
+        Assert.Same(exception.InnerException, record.Exception);
     }
 
     [Fact]
@@ -197,7 +226,7 @@ public class AcquiringBankClientTests
     {
         // Arrange
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        var (client, _) = CreateClient(async (_, ct) =>
+        var (client, _, logger) = CreateClient(async (_, ct) =>
         {
             await cts.CancelAsync();
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
@@ -207,5 +236,41 @@ public class AcquiringBankClientTests
         // Act & Assert
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             client.ProcessPaymentAsync(CreateRequest(), cts.Token));
+        Assert.DoesNotContain(logger.Collector.GetSnapshot(), r => r.Level >= LogLevel.Warning);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.OK, """{"authorized":true,"authorization_code":"abc"}""")]
+    [InlineData(HttpStatusCode.OK, "not json")]
+    [InlineData(HttpStatusCode.ServiceUnavailable, "{}")]
+    [InlineData(HttpStatusCode.BadRequest,
+        """{"error_message":"Not all required properties were sent in the request"}""")]
+    public async Task ProcessPaymentAsync_DoesNotLogCardNumberOrCvv(HttpStatusCode statusCode, string body)
+    {
+        // Arrange
+        var (client, _, logger) = CreateClient(statusCode, body);
+        var request = CreateRequest() with { Cvv = "7391" };
+
+        // Act
+        try
+        {
+            await client.ProcessPaymentAsync(request, TestContext.Current.CancellationToken);
+        }
+        catch (AcquiringBankException)
+        {
+        }
+
+        // Assert
+        var records = logger.Collector.GetSnapshot();
+        Assert.Contains(records, r => r.Level == LogLevel.Debug);
+        foreach (var record in records)
+        {
+            var loggedText = string.Join(" ",
+                new[] { record.Message, record.Exception?.ToString() }
+                    .Concat(record.StructuredState?.Select(kv => kv.Value) ?? []));
+
+            Assert.DoesNotContain(request.CardNumber, loggedText);
+            Assert.DoesNotContain(request.Cvv, loggedText);
+        }
     }
 }

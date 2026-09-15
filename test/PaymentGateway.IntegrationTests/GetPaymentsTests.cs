@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using PaymentGateway.Api.Controllers;
 using PaymentGateway.Api.Models.Responses;
@@ -32,7 +33,7 @@ public class GetPaymentsTests
 
         var paymentsRepository = new PaymentsRepository();
         paymentsRepository.Add(payment);
-        var paymentsService = new PaymentsService(paymentsRepository, TimeProvider.System);
+        var paymentsService = new PaymentsService(paymentsRepository, TimeProvider.System, NullLogger<PaymentsService>.Instance);
 
         var webApplicationFactory = new WebApplicationFactory<PaymentsController>();
         var client = webApplicationFactory.WithWebHostBuilder(builder =>
