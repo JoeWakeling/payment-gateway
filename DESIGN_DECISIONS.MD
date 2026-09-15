@@ -64,6 +64,15 @@ A `200 OK` authorization decision (authorized or declined) is returned as an `Ac
 
 `PaymentsService` catches any `AcquiringBankException` (including the unavailable case) and treats it as `Declined`: without an authorization decision from the bank the payment can't be considered authorized, so it's stored and returned as declined (`200 OK`) rather than surfacing as a `500`. The client still logs the underlying failure at Warning, so bank outages stay visible.
 
+This is a deliberate simplification, and the two failure shapes it collapses are not equivalent:
+
+- **No payment was attempted** — a `503`, a refused connection, a bad status returned before the request was processed. The bank made no decision and nothing was charged, so `Declined` is an honest answer and a retry is safe.
+- **The outcome is unknown** — a timeout, or a connection dropped mid-request. The request may have reached the bank and been authorized. `Declined` then asserts an outcome the gateway does not actually have, and a merchant reconciling against the bank's own records would find a charge with no matching authorized payment.
+
+The requirements define a closed status set (`Authorized`, `Declined`), so there is no value available to express "unknown" without extending the merchant-facing contract. Declining keeps the response within spec and keeps the failure visible in logs, which is the right trade for this exercise. In production the timeout case would need its own path: a `Pending` status reconciled asynchronously against the bank — which is precisely what the idempotency keys discussed below would make safe — or a `502 Bad Gateway` with nothing persisted, so the merchant knows to query rather than assume.
+
+There is a smaller cost too. A merchant currently cannot tell "the card was declined, don't retry" from "we couldn't reach the bank, a retry may work", because both are `200 OK` with `Declined`. A machine-readable decline reason on the response would fix that without changing the status set.
+
 ### Retries
 No retry logic was implemented for bank communication failures. In production, transient failures (network errors, 503s) would typically warrant a retry policy with backoff (e.g. via Polly), but the bank simulator's 503 response is deterministic based on card number rather than transient, so retries wouldn't change the outcome in this test harness. Idempotency would also need considering before adding retries to a payment flow, to avoid double-charging on a retried request that actually succeeded.
 
