@@ -2,11 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 
 using PaymentGateway.Api.Controllers;
 using PaymentGateway.Api.Models.Responses;
-using PaymentGateway.Application;
 using PaymentGateway.Application.Interfaces;
 using PaymentGateway.Domain;
 using PaymentGateway.Infrastructure;
@@ -33,18 +31,16 @@ public class GetPaymentsTests
 
         var paymentsRepository = new PaymentsRepository();
         paymentsRepository.Add(payment);
-        var paymentsService = new PaymentsService(paymentsRepository, TimeProvider.System, NullLogger<PaymentsService>.Instance);
 
         var webApplicationFactory = new WebApplicationFactory<PaymentsController>();
         var client = webApplicationFactory.WithWebHostBuilder(builder =>
-            builder.ConfigureServices(services => ((ServiceCollection)services)
-                .AddSingleton<IPaymentsRepository>(paymentsRepository)
-                .AddSingleton<IPaymentsService>(paymentsService)))
+            builder.ConfigureServices(services => services
+                .AddSingleton<IPaymentsRepository>(paymentsRepository)))
             .CreateClient();
 
         // Act
         var response = await client.GetAsync($"/api/Payments/{payment.Id}", TestContext.Current.CancellationToken);
-        var paymentResponse = await response.Content.ReadFromJsonAsync<PostPaymentResponse>(TestContext.Current.CancellationToken);
+        var paymentResponse = await response.Content.ReadFromJsonAsync<GetPaymentResponse>(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

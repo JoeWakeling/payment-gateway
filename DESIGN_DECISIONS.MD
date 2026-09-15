@@ -48,7 +48,7 @@ Two-step validation for the payment processing request, split across layers:
 
 Currency is validated case-insensitively against 3 currencies (GBP, USD, EUR) at the shape layer, then normalised to uppercase in Application — so `"gbp"` and `"GBP"`, for example, are both valid.
 
-Both failure paths return the same `Rejected` response — this 2-step validation process is opaque to the caller.
+Request shape failures return `400 Bad Request` with the FluentValidation errors as a validation problem response.
 
 ## Acquiring bank client
 
@@ -70,5 +70,6 @@ Serilog is used because the built-in `Microsoft.Extensions.Logging` has no file 
 What's logged:
 - **Every request:** method, path, status code and duration, plus unhandled exceptions.
 - **Acquiring bank calls:** the authorized/declined decision with latency, and every failure (503, bad status, bad body, network error, timeout) at Warning.
-- **Payments:** stored or rejected, with the `PaymentId`.
+- **Validation failures:** each field name and error message, never the attempted values.
+- **Payments:** stored or rejected, with the `PaymentId`; lookups for unknown payment ids.
 - **Never logged:** card number and CVV, checked by a test.
