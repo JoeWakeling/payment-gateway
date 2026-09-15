@@ -4,6 +4,6 @@ namespace PaymentGateway.Application.Interfaces;
 
 public interface IPaymentsRepository
 {
-    public void Add(Payment payment);
-    public Payment? Get(Guid id);
+    public Task AddAsync(Payment payment, CancellationToken cancellationToken);
+    public Task<Payment?> GetAsync(Guid id, CancellationToken cancellationToken);
 }
