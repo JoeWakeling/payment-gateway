@@ -1,32 +1,76 @@
+using FluentValidation;
+using FluentValidation.AspNetCore;
+
 using Microsoft.AspNetCore.Mvc;
 
+using PaymentGateway.Api.Models.Requests;
 using PaymentGateway.Api.Models.Responses;
 using PaymentGateway.Application.Interfaces;
+using PaymentGateway.Application.Models;
 
 namespace PaymentGateway.Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class PaymentsController : Controller
+public class PaymentsController(
+    IPaymentsService paymentsService,
+    IValidator<PostPaymentRequest> validator,
+    ILogger<PaymentsController> logger)
+    : Controller
 {
-    private readonly IPaymentsService _paymentsService;
-
-    public PaymentsController(IPaymentsService paymentsService)
+    [HttpPost]
+    public async Task<ActionResult<PostPaymentResponse>> PostPaymentAsync(
+        PostPaymentRequest request,
+        CancellationToken cancellationToken)
     {
-        _paymentsService = paymentsService;
+        var validationResult = await validator.ValidateAsync(request, cancellationToken);
+
+        if (!validationResult.IsValid)
+        {
+            logger.LogInformation("Payment request failed validation: {ValidationErrors}",
+                string.Join("; ", validationResult.Errors.Select(e => $"{e.PropertyName}: {e.ErrorMessage}")));
+
+            validationResult.AddToModelState(ModelState);
+            return ValidationProblem(ModelState);
+        }
+
+        var processPaymentRequest = new ProcessPaymentRequest(
+            Guid.NewGuid(),
+            request.CardNumber,
+            request.ExpiryMonth,
+            request.ExpiryYear,
+            request.Currency,
+            request.Amount,
+            request.Cvv);
+
+        var payment = await paymentsService.ProcessPaymentAsync(processPaymentRequest, cancellationToken);
+
+        var response = new PostPaymentResponse
+        {
+            Id = payment.Id,
+            Status = payment.Status,
+            CardNumberLastFour = payment.CardNumberLastFour,
+            ExpiryMonth = payment.ExpiryMonth,
+            ExpiryYear = payment.ExpiryYear,
+            Currency = payment.Currency,
+            Amount = payment.Amount
+        };
+
+        return new OkObjectResult(response);
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<PostPaymentResponse?>> GetPaymentAsync(Guid id)
+    public async Task<ActionResult<GetPaymentResponse?>> GetPaymentAsync(Guid id)
     {
-        var payment = _paymentsService.Get(id);
+        var payment = paymentsService.GetPaymentById(id);
 
         if (payment == null)
         {
+            logger.LogInformation("Payment {PaymentId} not found", id);
             return NotFound();
         }
 
-        var response = new PostPaymentResponse
+        var response = new GetPaymentResponse
         {
             Id = payment.Id,
             Status = payment.Status,
