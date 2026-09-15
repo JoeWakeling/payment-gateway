@@ -31,8 +31,8 @@ public class GetPaymentsTests
             Currency = "GBP"
         };
 
-        var paymentsRepository = new PaymentsRepository();
-        paymentsRepository.Add(payment);
+        var paymentsRepository = new InMemoryPaymentsRepository();
+        await paymentsRepository.AddAsync(payment, TestContext.Current.CancellationToken);
         var paymentsService = new PaymentsService(paymentsRepository, TimeProvider.System, NullLogger<PaymentsService>.Instance);
 
         var webApplicationFactory = new WebApplicationFactory<PaymentsController>();

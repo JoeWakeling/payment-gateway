@@ -11,7 +11,7 @@ public class PaymentsService(
     ILogger<PaymentsService> logger)
     : IPaymentsService
 {
-    public void Add(Payment payment)
+    public async Task AddAsync(Payment payment, CancellationToken cancellationToken)
     {
         using var _ = logger.BeginScope(new Dictionary<string, object> { ["PaymentId"] = payment.Id });
 
@@ -23,14 +23,14 @@ public class PaymentsService(
 
         payment.Currency = payment.Currency.ToUpperInvariant();
 
-        paymentsRepository.Add(payment);
+        await paymentsRepository.AddAsync(payment, cancellationToken);
 
         logger.LogInformation("Payment stored with status {Status}", payment.Status);
     }
 
-    public Payment? Get(Guid id)
+    public Task<Payment?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
-        return paymentsRepository.Get(id);
+        return paymentsRepository.GetAsync(id, cancellationToken);
     }
 
     private bool IsCardExpired(Payment payment)
