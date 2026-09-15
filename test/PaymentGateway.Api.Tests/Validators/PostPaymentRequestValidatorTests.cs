@@ -91,6 +91,19 @@ public class PostPaymentRequestValidatorTests
         result.ShouldHaveValidationErrorFor(x => x.CardNumber);
     }
 
+    [Theory]
+    [InlineData("1234567890\u0664\u0664\u0664\u0664")] // Arabic-Indic digits
+    [InlineData("1234567890\uFF14\uFF14\uFF14\uFF14")] // Fullwidth digits
+    public void CardNumber_WhenContainsNonAsciiDigits_FailsValidation(string cardNumber)
+    {
+        var request = CreateValidRequest();
+        request.CardNumber = cardNumber;
+
+        var result = _validator.TestValidate(request);
+
+        result.ShouldHaveValidationErrorFor(x => x.CardNumber);
+    }
+
     // ExpiryMonth tests
 
     [Theory]
@@ -125,7 +138,9 @@ public class PostPaymentRequestValidatorTests
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    public void ExpiryYear_WhenZeroOrNegative_FailsValidation(int year)
+    [InlineData(10000)]
+    [InlineData(int.MaxValue)]
+    public void ExpiryYear_WhenOutOfRange_FailsValidation(int year)
     {
         var request = CreateValidRequest();
         request.ExpiryYear = year;
@@ -135,11 +150,14 @@ public class PostPaymentRequestValidatorTests
         result.ShouldHaveValidationErrorFor(x => x.ExpiryYear);
     }
 
-    [Fact]
-    public void ExpiryYear_WhenPositive_PassesValidation()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2027)]
+    [InlineData(9999)]
+    public void ExpiryYear_WhenInRange_PassesValidation(int year)
     {
         var request = CreateValidRequest();
-        request.ExpiryYear = 2027;
+        request.ExpiryYear = year;
 
         var result = _validator.TestValidate(request);
 
@@ -299,6 +317,19 @@ public class PostPaymentRequestValidatorTests
     {
         var request = CreateValidRequest();
         request.Cvv = "12a";
+
+        var result = _validator.TestValidate(request);
+
+        result.ShouldHaveValidationErrorFor(x => x.Cvv);
+    }
+
+    [Theory]
+    [InlineData("12\u0664")] // Arabic-Indic digit
+    [InlineData("12\uFF14")] // Fullwidth digit
+    public void Cvv_WhenContainsNonAsciiDigits_FailsValidation(string cvv)
+    {
+        var request = CreateValidRequest();
+        request.Cvv = cvv;
 
         var result = _validator.TestValidate(request);
 

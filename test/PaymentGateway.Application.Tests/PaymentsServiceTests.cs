@@ -32,9 +32,10 @@ public class PaymentsServiceTests
     private static ProcessPaymentRequest CreateRequest(
         int expiryMonth = 6,
         int expiryYear = 2024,
-        string currency = "GBP") => new(
+        string currency = "GBP",
+        string cardNumber = "2222405343248877") => new(
         Id: Guid.NewGuid(),
-        CardNumber: "2222405343248877",
+        CardNumber: cardNumber,
         ExpiryMonth: expiryMonth,
         ExpiryYear: expiryYear,
         Currency: currency,
@@ -77,7 +78,7 @@ public class PaymentsServiceTests
         // Assert
         Assert.Equal(request.Id, payment.Id);
         Assert.Equal(PaymentStatus.Authorized, payment.Status);
-        Assert.Equal(8877, payment.CardNumberLastFour);
+        Assert.Equal("8877", payment.CardNumberLastFour);
         Assert.Equal(request.ExpiryMonth, payment.ExpiryMonth);
         Assert.Equal(request.ExpiryYear, payment.ExpiryYear);
         Assert.Equal(request.Currency, payment.Currency);
@@ -86,6 +87,20 @@ public class PaymentsServiceTests
         VerifyLogged(LogLevel.Information, "Payment stored with status Authorized");
         var scope = Assert.IsType<Dictionary<string, object>>(Assert.Single(_logger.LatestRecord.Scopes));
         Assert.Equal(request.Id, scope["PaymentId"]);
+    }
+
+    [Fact]
+    public async Task ProcessPaymentAsync_CardNumberLastFourHasLeadingZeros_PreservesLeadingZeros()
+    {
+        // Arrange
+        SetupNow(2024, 1, 15);
+        var request = CreateRequest(expiryMonth: 2, expiryYear: 2024, cardNumber: "2222405343240012");
+
+        // Act
+        var payment = await _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal("0012", payment.CardNumberLastFour);
     }
 
     [Fact]
@@ -149,7 +164,7 @@ public class PaymentsServiceTests
         // Assert
         Assert.Equal(request.Id, payment.Id);
         Assert.Equal(PaymentStatus.Declined, payment.Status);
-        Assert.Equal(8877, payment.CardNumberLastFour);
+        Assert.Equal("8877", payment.CardNumberLastFour);
         _paymentsRepository.Verify(r => r.AddAsync(payment, TestContext.Current.CancellationToken), Times.Once);
         var records = _logger.Collector.GetSnapshot();
         Assert.Collection(records,
@@ -252,6 +267,20 @@ public class PaymentsServiceTests
             () => _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken));
         VerifyNotProcessed();
         VerifyLogged(LogLevel.Information, "Payment rejected: card expired");
+    }
+
+    [Fact]
+    public async Task ProcessPaymentAsync_CardExpiresInDecemberOfMaxYear_ProcessesPayment()
+    {
+        // Arrange
+        SetupNow(2024, 1, 15);
+        var request = CreateRequest(expiryMonth: 12, expiryYear: 9999);
+
+        // Act
+        var payment = await _sut.ProcessPaymentAsync(request, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(PaymentStatus.Authorized, payment.Status);
     }
 
     [Theory]

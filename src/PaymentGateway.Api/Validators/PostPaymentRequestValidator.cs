@@ -15,7 +15,7 @@ public class PostPaymentRequestValidator : AbstractValidator<PostPaymentRequest>
         RuleFor(x => x.CardNumber)
             .NotEmpty()
             .Length(14, 19)
-            .Must(x => x is not null && x.All(char.IsDigit))
+            .Must(x => x is not null && x.All(char.IsAsciiDigit))
             .WithMessage("'{PropertyName}' must contain only numeric characters.");
 
         RuleFor(x => x.ExpiryMonth)
@@ -23,7 +23,7 @@ public class PostPaymentRequestValidator : AbstractValidator<PostPaymentRequest>
 
         RuleFor(x => x.ExpiryYear)
             .NotEmpty()
-            .GreaterThan(0); // Application logic is responsible for rejecting expired cards
+            .InclusiveBetween(1, 9999); // Application logic is responsible for rejecting expired cards
 
         RuleFor(x => x.Currency)
             .NotEmpty()
@@ -37,7 +37,7 @@ public class PostPaymentRequestValidator : AbstractValidator<PostPaymentRequest>
         RuleFor(x => x.Cvv)
             .NotEmpty()
             .Length(3, 4)
-            .Must(x => x is not null && x.All(char.IsDigit))
+            .Must(x => x is not null && x.All(char.IsAsciiDigit))
             .WithMessage("'{PropertyName}' must contain only numeric characters.");
     }
 }
