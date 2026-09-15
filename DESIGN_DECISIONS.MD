@@ -62,3 +62,13 @@ No retry logic was implemented for bank communication failures. In production, t
 
 ### Idempotency
 Not implemented, as the bank simulator has no support for idempotency keys. In production this would be important — perhaps an idempotency key passed through to the bank so that retried requests can't result in duplicate charges.
+
+## Logging
+
+Serilog is used because the built-in `Microsoft.Extensions.Logging` has no file provider. Only the Api project depends on Serilog; Application and Infrastructure log through `ILogger<T>`.
+
+What's logged:
+- **Every request:** method, path, status code and duration, plus unhandled exceptions.
+- **Acquiring bank calls:** the authorized/declined decision with latency, and every failure (503, bad status, bad body, network error, timeout) at Warning.
+- **Payments:** stored or rejected, with the `PaymentId`.
+- **Never logged:** card number and CVV, checked by a test.

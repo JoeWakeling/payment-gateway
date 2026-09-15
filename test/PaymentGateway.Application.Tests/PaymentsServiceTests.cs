@@ -1,3 +1,6 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
+
 using Moq;
 
 using PaymentGateway.Application.Interfaces;
@@ -9,11 +12,12 @@ public class PaymentsServiceTests
 {
     private readonly Mock<IPaymentsRepository> _paymentsRepository = new();
     private readonly Mock<TimeProvider> _timeProvider = new();
+    private readonly FakeLogger<PaymentsService> _logger = new();
     private readonly PaymentsService _sut;
 
     public PaymentsServiceTests()
     {
-        _sut = new PaymentsService(_paymentsRepository.Object, _timeProvider.Object);
+        _sut = new PaymentsService(_paymentsRepository.Object, _timeProvider.Object, _logger);
     }
 
     private static Payment CreatePayment(int expiryMonth, int expiryYear) => new()
@@ -27,6 +31,13 @@ public class PaymentsServiceTests
         Amount = 100
     };
 
+    private void VerifyLogged(LogLevel level, string message)
+    {
+        var record = Assert.Single(_logger.Collector.GetSnapshot());
+        Assert.Equal(level, record.Level);
+        Assert.Equal(message, record.Message);
+    }
+
     [Fact]
     public void Add_CardExpiresInFutureMonth_AddsPayment()
     {
@@ -39,6 +50,9 @@ public class PaymentsServiceTests
 
         // Assert
         _paymentsRepository.Verify(r => r.Add(payment), Times.Once);
+        VerifyLogged(LogLevel.Information, "Payment stored with status Authorized");
+        var scope = Assert.IsType<Dictionary<string, object>>(Assert.Single(_logger.LatestRecord.Scopes));
+        Assert.Equal(payment.Id, scope["PaymentId"]);
     }
 
     [Fact]
@@ -53,6 +67,7 @@ public class PaymentsServiceTests
 
         // Assert
         _paymentsRepository.Verify(r => r.Add(payment), Times.Once);
+        VerifyLogged(LogLevel.Information, "Payment stored with status Authorized");
     }
 
     [Fact]
@@ -67,6 +82,7 @@ public class PaymentsServiceTests
 
         // Assert
         _paymentsRepository.Verify(r => r.Add(payment), Times.Once);
+        VerifyLogged(LogLevel.Information, "Payment stored with status Authorized");
     }
 
     [Fact]
@@ -80,6 +96,7 @@ public class PaymentsServiceTests
         var exception = Assert.Throws<ArgumentException>(() => _sut.Add(payment));
         Assert.Equal("Payment card has expired.", exception.Message);
         _paymentsRepository.Verify(r => r.Add(It.IsAny<Payment>()), Times.Never);
+        VerifyLogged(LogLevel.Information, "Payment rejected: card expired");
     }
 
     [Fact]
@@ -92,6 +109,7 @@ public class PaymentsServiceTests
         // Act & Assert
         Assert.Throws<ArgumentException>(() => _sut.Add(payment));
         _paymentsRepository.Verify(r => r.Add(It.IsAny<Payment>()), Times.Never);
+        VerifyLogged(LogLevel.Information, "Payment rejected: card expired");
     }
 
     [Fact]
@@ -104,6 +122,7 @@ public class PaymentsServiceTests
         // Act & Assert
         Assert.Throws<ArgumentException>(() => _sut.Add(payment));
         _paymentsRepository.Verify(r => r.Add(It.IsAny<Payment>()), Times.Never);
+        VerifyLogged(LogLevel.Information, "Payment rejected: card expired");
     }
 
     [Fact]
