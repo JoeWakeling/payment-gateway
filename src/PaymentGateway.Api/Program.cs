@@ -2,6 +2,8 @@ using System.Text.Json.Serialization;
 
 using FluentValidation;
 
+using Microsoft.OpenApi.Models;
+
 using PaymentGateway.Application;
 using PaymentGateway.Application.Interfaces;
 using PaymentGateway.Infrastructure;
@@ -23,7 +25,18 @@ builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "Payment Gateway API",
+        Version = "v1",
+        Description = "A simplified payment gateway that validates and forwards card payments to an acquiring bank."
+    });
+    options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, "PaymentGateway.Api.xml"));
+    // Lets enum properties (e.g. Status) keep their XML doc description alongside the schema reference
+    options.UseAllOfToExtendReferenceSchemas();
+});
 
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
