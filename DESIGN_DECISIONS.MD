@@ -90,3 +90,12 @@ What's logged:
 - **Validation failures:** each field name and error message, never the attempted values.
 - **Payments:** stored or rejected, with the `PaymentId`; lookups for unknown payment ids.
 - **Never logged:** card number and CVV, checked by a test.
+
+## API documentation
+
+API documentation is generated via Swagger/OpenAPI (Swashbuckle), available at `/swagger` when running in the Development environment. Controller actions have `[ProducesResponseType]` annotations and XML doc comments, and the request/response DTOs have XML doc comments on each field, so the generated docs reflect every response outcome rather than only the default success case:
+
+- `POST /api/payments` — `200` (Authorized/Declined), `400` (validation problem), `422` (payment rejected)
+- `GET /api/payments/{id}` — `200` (payment found), `404` (not found)
+
+Swagger is only enabled in Development, as in the template, since there's no need to expose API docs publicly in production. No example request/response values were added: the field descriptions are enough for two endpoints, and it avoids showing anything resembling real card details.

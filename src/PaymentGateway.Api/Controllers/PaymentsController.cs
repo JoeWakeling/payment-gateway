@@ -20,7 +20,20 @@ public class PaymentsController(
     ILogger<PaymentsController> logger)
     : Controller
 {
+    /// <summary>
+    /// Processes a card payment through the payment gateway.
+    /// </summary>
+    /// <param name="request">The payment details to process.</param>
+    /// <param name="cancellationToken">Cancellation token for the request.</param>
+    /// <response code="200">The payment was processed and stored with a status of Authorized or Declined. A payment is
+    /// Declined if the acquiring bank declines it or no valid response is received from the bank.</response>
+    /// <response code="400">The request failed validation and was not sent to the acquiring bank.</response>
+    /// <response code="422">The payment was rejected (e.g. the card has expired) and was not sent to the acquiring
+    /// bank or stored.</response>
     [HttpPost]
+    [ProducesResponseType(typeof(PostPaymentResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<PostPaymentResponse>> PostPaymentAsync(
         PostPaymentRequest request,
         CancellationToken cancellationToken)
@@ -70,7 +83,16 @@ public class PaymentsController(
         return new OkObjectResult(response);
     }
 
+    /// <summary>
+    /// Retrieves a previously processed payment.
+    /// </summary>
+    /// <param name="id">The payment identifier returned when the payment was processed.</param>
+    /// <param name="cancellationToken">Cancellation token for the request.</param>
+    /// <response code="200">The payment was found.</response>
+    /// <response code="404">No payment exists with the given identifier.</response>
     [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(GetPaymentResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<GetPaymentResponse?>> GetPaymentAsync(Guid id, CancellationToken cancellationToken)
     {
         var payment = await paymentsService.GetPaymentByIdAsync(id, cancellationToken);
