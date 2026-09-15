@@ -32,7 +32,7 @@ public class PaymentsService(
         {
             Id = request.Id,
             Status = authorized ? PaymentStatus.Authorized : PaymentStatus.Declined,
-            CardNumberLastFour = int.Parse(request.CardNumber[^4..]),
+            CardNumberLastFour = request.CardNumber[^4..],
             ExpiryMonth = request.ExpiryMonth,
             ExpiryYear = request.ExpiryYear,
             Currency = currency,
@@ -81,8 +81,8 @@ public class PaymentsService(
     private bool IsCardExpired(int expiryMonth, int expiryYear)
     {
         var now = timeProvider.GetUtcNow();
-        var expiryDate = new DateOnly(expiryYear, expiryMonth, 1).AddMonths(1);
 
-        return expiryDate <= DateOnly.FromDateTime(now.DateTime);
+        // Compared as year/month rather than building a date, which would throw for December 9999
+        return expiryYear < now.Year || (expiryYear == now.Year && expiryMonth < now.Month);
     }
 }

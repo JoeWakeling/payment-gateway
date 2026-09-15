@@ -33,7 +33,7 @@ public class GetPaymentsTests
             ExpiryYear = _random.Next(2023, 2030),
             ExpiryMonth = _random.Next(1, 12),
             Amount = _random.Next(1, 10000),
-            CardNumberLastFour = _random.Next(1111, 9999),
+            CardNumberLastFour = _random.Next(0, 10000).ToString("D4"),
             Currency = "GBP"
         };
 

@@ -10,7 +10,7 @@ public class InMemoryPaymentsRepositoryTests
     {
         Id = Guid.NewGuid(),
         Status = PaymentStatus.Authorized,
-        CardNumberLastFour = 1234,
+        CardNumberLastFour = "1234",
         ExpiryMonth = 12,
         ExpiryYear = 2030,
         Currency = "GBP",
