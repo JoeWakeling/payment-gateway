@@ -1,0 +1,34 @@
+# Build output
+**/bin/
+**/obj/
+**/out/
+
+# Logs produced by the running app (bind-mounted at runtime)
+logs/
+
+# IDE / tooling
+.idea/
+.vs/
+.vscode/
+.claude/
+*.user
+*.DotSettings.user
+
+# VCS & CI
+.git/
+.github/
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Docs & simulator config
+*.md
+*.MD
+imposters/
+
+# macOS
+.DS_Store
