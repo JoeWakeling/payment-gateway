@@ -28,3 +28,8 @@ jobs:
       # no running simulator and no other external dependency.
       - name: Test
         run: dotnet test --no-build --configuration Release
+
+      # The Dockerfile is part of the deliverable, so a break in it should fail CI
+      # rather than surface the first time someone runs the stack.
+      - name: Build image
+        run: docker compose build api
