@@ -17,7 +17,7 @@ public class PostPaymentRequest
     public string Currency { get; set; } = String.Empty;
     /// <summary>The payment amount in the minor currency unit (e.g. 1050 is £10.50 in GBP). Must be greater than 0.</summary>
     /// <example>1050</example>
-    public int Amount { get; set; }
+    public long Amount { get; set; }
     /// <summary>The card verification value, 3-4 numeric characters.</summary>
     /// <example>123</example>
     public string Cvv { get; set; } = String.Empty;
