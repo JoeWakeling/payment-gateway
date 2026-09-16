@@ -8,5 +8,5 @@ public class Payment
     public int ExpiryMonth { get; set; }
     public int ExpiryYear { get; set; }
     public required string Currency { get; set; }
-    public long Amount { get; set; }
+    public int Amount { get; set; }
 }

@@ -6,5 +6,5 @@ public record ProcessPaymentRequest(
     int ExpiryMonth,
     int ExpiryYear,
     string Currency,
-    long Amount,
+    int Amount,
     string Cvv);

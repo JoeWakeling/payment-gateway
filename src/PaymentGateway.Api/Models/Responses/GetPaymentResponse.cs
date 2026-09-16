@@ -25,5 +25,5 @@ public class GetPaymentResponse
     public required string Currency { get; set; }
     /// <summary>The payment amount in the minor currency unit (e.g. 1050 is £10.50 in GBP).</summary>
     /// <example>1050</example>
-    public long Amount { get; set; }
+    public int Amount { get; set; }
 }
