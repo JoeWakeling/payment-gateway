@@ -4,6 +4,7 @@ using FluentValidation;
 
 using Microsoft.OpenApi.Models;
 
+using PaymentGateway.Api.Swagger;
 using PaymentGateway.Application;
 using PaymentGateway.Application.Interfaces;
 using PaymentGateway.Infrastructure;
@@ -38,6 +39,8 @@ builder.Services.AddSwaggerGen(options =>
     options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, "PaymentGateway.Api.xml"));
     // Lets enum properties (e.g. Status) keep their XML doc description alongside the schema reference
     options.UseAllOfToExtendReferenceSchemas();
+    // Replaces the placeholder bodies Swagger UI would otherwise invent for the ProblemDetails schemas
+    options.OperationFilter<ProblemDetailsExampleOperationFilter>();
 });
 
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
