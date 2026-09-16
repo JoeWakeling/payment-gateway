@@ -1,3 +1,5 @@
+using System.Net.Mime;
+
 using FluentValidation;
 using FluentValidation.AspNetCore;
 
@@ -20,6 +22,9 @@ public class PaymentsController(
     ILogger<PaymentsController> logger)
     : ControllerBase
 {
+    /// <summary>Every error response in this API is RFC 7807 problem details.</summary>
+    private const string ProblemJson = "application/problem+json";
+
     /// <summary>
     /// Processes a card payment through the payment gateway.
     /// </summary>
@@ -31,9 +36,9 @@ public class PaymentsController(
     /// <response code="422">The payment was rejected (e.g. the card has expired) and was not sent to the acquiring
     /// bank or stored.</response>
     [HttpPost]
-    [ProducesResponseType(typeof(PostPaymentResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity)]
+    [ProducesResponseType(typeof(PostPaymentResponse), StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest, ProblemJson)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity, ProblemJson)]
     public async Task<ActionResult<PostPaymentResponse>> PostPaymentAsync(
         PostPaymentRequest request,
         CancellationToken cancellationToken)
@@ -91,8 +96,8 @@ public class PaymentsController(
     /// <response code="200">The payment was found.</response>
     /// <response code="404">No payment exists with the given identifier.</response>
     [HttpGet("{id:guid}")]
-    [ProducesResponseType(typeof(GetPaymentResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(GetPaymentResponse), StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, ProblemJson)]
     public async Task<ActionResult<GetPaymentResponse?>> GetPaymentAsync(Guid id, CancellationToken cancellationToken)
     {
         var payment = await paymentsService.GetPaymentByIdAsync(id, cancellationToken);

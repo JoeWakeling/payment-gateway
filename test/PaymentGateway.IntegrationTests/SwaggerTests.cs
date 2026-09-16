@@ -77,6 +77,64 @@ public class SwaggerTests
             ResponseCodes(paths.GetProperty("/api/Payments/{id}").GetProperty("get")));
     }
 
+    [Theory]
+    [InlineData("/api/Payments", "post", "400")]
+    [InlineData("/api/Payments", "post", "422")]
+    [InlineData("/api/Payments/{id}", "get", "404")]
+    public async Task SwaggerDocument_DescribesErrorResponsesAsProblemJsonOnly(
+        string path, string verb, string statusCode)
+    {
+        // Arrange
+        await using var factory = CreateDevelopmentFactory();
+        var client = factory.CreateClient();
+
+        // Act
+        var response = await client.GetAsync(SwaggerDocumentPath, TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        // Without an explicit content type Swashbuckle also advertises text/plain and text/json, neither of which
+        // this API ever returns.
+        using var document = JsonDocument.Parse(body);
+        var content = document.RootElement
+            .GetProperty("paths").GetProperty(path).GetProperty(verb)
+            .GetProperty("responses").GetProperty(statusCode)
+            .GetProperty("content");
+
+        var mediaType = Assert.Single(content.EnumerateObject());
+        Assert.Equal("application/problem+json", mediaType.Name);
+    }
+
+    [Theory]
+    [InlineData("/api/Payments", "post", "400")]
+    [InlineData("/api/Payments", "post", "422")]
+    [InlineData("/api/Payments/{id}", "get", "404")]
+    public async Task SwaggerDocument_GivesErrorResponsesARealExampleBody(
+        string path, string verb, string statusCode)
+    {
+        // Arrange
+        await using var factory = CreateDevelopmentFactory();
+        var client = factory.CreateClient();
+
+        // Act
+        var response = await client.GetAsync(SwaggerDocumentPath, TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        // ProblemDetails has no example values of its own, so without the operation filter Swagger UI renders
+        // "title": "string" and "status": 0 as though they were the contract.
+        using var document = JsonDocument.Parse(body);
+        var example = document.RootElement
+            .GetProperty("paths").GetProperty(path).GetProperty(verb)
+            .GetProperty("responses").GetProperty(statusCode)
+            .GetProperty("content").GetProperty("application/problem+json")
+            .GetProperty("example");
+
+        Assert.Equal(int.Parse(statusCode), example.GetProperty("status").GetInt32());
+        Assert.NotEqual("string", example.GetProperty("title").GetString());
+        Assert.StartsWith("https://", example.GetProperty("type").GetString());
+    }
+
     private static string[] ResponseCodes(JsonElement operation) =>
         operation.GetProperty("responses")
             .EnumerateObject()
