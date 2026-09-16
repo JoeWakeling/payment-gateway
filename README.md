@@ -7,7 +7,15 @@ The acquiring bank is a [Mountebank](https://www.mbtest.org/) simulator running 
 four projects — Domain, Application, Infrastructure and Api — so that dependency boundaries are enforced by the
 compiler rather than by convention.
 
-Full rationale for each decision lives in [DESIGN_DECISIONS.MD](DESIGN_DECISIONS.MD); this README gives an overview of the design.
+Two companion documents sit alongside this one: [DESIGN_DECISIONS.MD](DESIGN_DECISIONS.MD) has the full rationale for
+each decision, and [assumptions.md](assumptions.md) records where the brief left room for interpretation and what was
+chosen instead. This README gives an overview of the design.
+
+> **One deliberate deviation from the brief.** The brief lists three payment statuses — `Authorized`, `Declined` and
+> `Rejected`. This gateway stores only the first two. A rejected request never becomes a payment, so it is reported
+> through the HTTP status code and a problem details body (`400` for a malformed request, `422` for a broken business
+> rule) rather than stored and returned with a `Rejected` status. The reasoning is in
+> [Why these status codes](#why-these-status-codes) and [assumptions.md](assumptions.md).
 
 ## Contents
 
@@ -16,6 +24,8 @@ Full rationale for each decision lives in [DESIGN_DECISIONS.MD](DESIGN_DECISIONS
 - [Running it](#running-it)
 - [Tests](#tests)
 - [Known limitations and next steps](#known-limitations-and-next-steps)
+- [Assumptions](assumptions.md)
+- [Design decisions](DESIGN_DECISIONS.MD)
 
 ## API
 
@@ -32,7 +42,7 @@ Processes a payment.
 | `expiryMonth` | int | Required, 1–12 |
 | `expiryYear` | int | Required, 1–9999; together with the month, must be in the future |
 | `currency` | string | Required, one of `GBP`, `USD`, `EUR` (case-insensitive) |
-| `amount` | int | Required, greater than 0, in the **minor currency unit** (`1050` is £10.50) |
+| `amount` | integer | Required, greater than 0, in the **minor currency unit** (`1050` is £10.50) |
 | `cvv` | string | Required, 3–4 characters, digits only |
 
 ```json
