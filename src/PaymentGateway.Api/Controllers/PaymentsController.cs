@@ -18,7 +18,7 @@ public class PaymentsController(
     IPaymentsService paymentsService,
     IValidator<PostPaymentRequest> validator,
     ILogger<PaymentsController> logger)
-    : Controller
+    : ControllerBase
 {
     /// <summary>
     /// Processes a card payment through the payment gateway.
@@ -80,7 +80,7 @@ public class PaymentsController(
             Amount = payment.Amount
         };
 
-        return new OkObjectResult(response);
+        return Ok(response);
     }
 
     /// <summary>
@@ -114,6 +114,6 @@ public class PaymentsController(
             Amount = payment.Amount
         };
 
-        return new OkObjectResult(response);
+        return Ok(response);
     }
 }
