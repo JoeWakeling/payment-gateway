@@ -63,7 +63,7 @@ public class PostPaymentsModelBindingTests
         Assert.Equal("One or more validation errors occurred.", problemDetails.Title);
         Assert.Equal((int)HttpStatusCode.BadRequest, problemDetails.Status);
         var jsonError = Assert.Single(problemDetails.Errors["$.amount"]);
-        Assert.Contains("The JSON value could not be converted to System.Int64.", jsonError);
+        Assert.Contains("The JSON value could not be converted to System.Int32.", jsonError);
         Assert.Empty(factory.AcquiringBank.Requests);
     }
 

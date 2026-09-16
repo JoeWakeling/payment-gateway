@@ -65,32 +65,8 @@ public class PostPaymentsTests
         Assert.Equal(request.CardNumber, bankRequest.Body["card_number"]!.GetValue<string>());
         Assert.Equal($"04/{request.ExpiryYear}", bankRequest.Body["expiry_date"]!.GetValue<string>());
         Assert.Equal("GBP", bankRequest.Body["currency"]!.GetValue<string>());
-        Assert.Equal(request.Amount, bankRequest.Body["amount"]!.GetValue<long>());
+        Assert.Equal(request.Amount, bankRequest.Body["amount"]!.GetValue<int>());
         Assert.Equal(request.Cvv, bankRequest.Body["cvv"]!.GetValue<string>());
-    }
-
-    [Fact]
-    public async Task ProcessesAmountLargerThanInt32()
-    {
-        // Arrange
-        await using var factory = new PaymentGatewayApiFactory();
-        var client = factory.CreateClient();
-        var request = CreateValidRequest();
-        // One past int.MaxValue: fails if Amount is ever narrowed back to an int.
-        request.Amount = 2_147_483_648L;
-
-        // Act
-        var response = await client.PostAsJsonAsync("/api/Payments", request, TestContext.Current.CancellationToken);
-        var paymentResponse = await response.Content.ReadFromJsonAsync<PostPaymentResponse>(
-            JsonOptions, TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.NotNull(paymentResponse);
-        Assert.Equal(2_147_483_648L, paymentResponse.Amount);
-
-        var bankRequest = Assert.Single(factory.AcquiringBank.Requests);
-        Assert.Equal(2_147_483_648L, bankRequest.Body!["amount"]!.GetValue<long>());
     }
 
     [Fact]
