@@ -2,19 +2,19 @@
 
 ## 1. Cards expiring in the current month are valid
 
-A card whose expiry date falls in the current month is accepted. This is industry standard — a card remains valid until the end of its expiry month.
+A card whose expiry date falls in the current month is accepted. This is the industry standard — a card remains valid until the end of its expiry month.
 
-The end of the month is evaluated in UTC. The request carries no issuer timezone, so near a month boundary a card may be treated as expired a few hours early or late relative to local time. This has been simplified for the sake of this task; in reality, cutoff hours vary by gateway and issuer.
+The end of the month is evaluated in UTC. The request carries no issuer timezone, so near a month boundary a card may be treated as expired a few hours early or late relative to local time. This has been simplified for the sake of this task; in reality, cutoff hours may vary by gateway and issuer.
 
 ## 2. Retrievable payments are those that reached the acquiring bank
 
 > "A merchant should be able to retrieve the details of a previously made payment"
 
-"Made" in this context refers to payments that reached the acquiring bank. Requests rejected at validation never make it that far, so they are not stored and cannot be retrieved.
+"Made" in this context refers to payments where an attempt it made to process them with the acquiring bank. Requests rejected at validation never make it that far, so they are not stored and cannot be retrieved.
 
 ## 3. Rejected requests do not echo back the original request
 
-Unlike a successful payment, a request rejected at validation does not return the original contents of the request. That information is not relevant to the merchant, and in some cases cannot be returned at all — e.g. if validation fails because data is missing, there is nothing to return.
+Unlike a successful payment, a request rejected at validation does not return the original contents of the request. In some cases it may not be possible — e.g. if validation fails because data is missing, there is nothing to return - so validation error messages are returned instead.
 
 A rejection is conveyed by the HTTP status code (`400` or `422`) and a problem details body, rather than a response with a `Status` of `Rejected`.
 
