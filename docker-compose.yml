@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   bank_simulator:
     container_name: bank_simulator
@@ -12,4 +10,24 @@ services:
       - type: bind
         source: ./imposters
         target: /imposters
-      
+
+  api:
+    container_name: payment_gateway_api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      # Host 8081 -> container 8080; 8080 on the host is taken by the simulator.
+      - "8081:8080"
+    environment:
+      # Development so Swagger UI is served inside the container too.
+      ASPNETCORE_ENVIRONMENT: Development
+      # Reach the simulator over the compose network rather than localhost.
+      AcquiringBank__BaseUrl: http://bank_simulator:8080/
+    volumes:
+      # Write logs to host folder
+      - type: bind
+        source: ./logs
+        target: /app/logs
+    depends_on:
+      - bank_simulator
