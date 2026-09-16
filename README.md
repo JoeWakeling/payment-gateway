@@ -3,19 +3,12 @@
 A simplified card payment gateway built with ASP.NET Core 8. It validates a card payment, forwards it to an acquiring
 bank for authorization, stores the outcome, and exposes that payment for later retrieval.
 
-The acquiring bank is a [Mountebank](https://www.mbtest.org/) simulator running in Docker. The solution is split into
-four projects — Domain, Application, Infrastructure and Api — so that dependency boundaries are enforced by the
+The solution is split into four projects — Domain, Application, Infrastructure and Api — so that dependency boundaries are enforced by the
 compiler rather than by convention.
 
 Two companion documents sit alongside this one: [DESIGN_DECISIONS.MD](DESIGN_DECISIONS.MD) has the full rationale for
 each decision, and [assumptions.md](assumptions.md) records where the brief left room for interpretation and what was
 chosen instead. This README gives an overview of the design.
-
-> **One deliberate deviation from the brief.** The brief lists three payment statuses — `Authorized`, `Declined` and
-> `Rejected`. This gateway stores only the first two. A rejected request never becomes a payment, so it is reported
-> through the HTTP status code and a problem details body (`400` for a malformed request, `422` for a broken business
-> rule) rather than stored and returned with a `Rejected` status. The reasoning is in
-> [Why these status codes](#why-these-status-codes) and [assumptions.md](assumptions.md).
 
 ## Contents
 
@@ -275,8 +268,6 @@ The tooling is xUnit v3 throughout, with Moq for mocking, `FakeLogger<T>` from
 the validator rules. HTTP is faked with hand-written stubs for simplicity at this scale.
 
 ### Tests that encode decisions
-
-Most of the suite is unremarkable, but three cases exist to pin down decisions rather than mechanics:
 
 - `ProcessPaymentAsync_DoesNotLogCardNumberOrCvv` — scans all log output for the PAN and CVV, so the "never logged"
   guarantee fails loudly if someone adds a convenient debug line.
