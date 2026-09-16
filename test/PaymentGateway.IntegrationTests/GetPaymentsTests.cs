@@ -67,8 +67,18 @@ public class GetPaymentsTests
 
         // Act
         var response = await client.GetAsync($"/api/Payments/{Guid.NewGuid()}", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         // Assert
+        // The controller returns a bare NotFound(); the [ApiController] client-error filter is what turns it into
+        // problem+json. That is the documented 404 contract, so it is asserted rather than assumed.
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+
+        using var problem = JsonDocument.Parse(body);
+        Assert.Equal("Not Found", problem.RootElement.GetProperty("title").GetString());
+        Assert.Equal(404, problem.RootElement.GetProperty("status").GetInt32());
+        Assert.Equal("https://tools.ietf.org/html/rfc9110#section-15.5.5",
+            problem.RootElement.GetProperty("type").GetString());
     }
 }
